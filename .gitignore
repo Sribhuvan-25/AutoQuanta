@@ -1,0 +1,4 @@
+Docs/
+.env
+Tests/
+Analysis/__pycache__/
