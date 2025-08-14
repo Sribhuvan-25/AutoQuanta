@@ -23,12 +23,8 @@ except ImportError:
     logger = logging.getLogger(__name__)
     logger.warning("ONNX libraries not available. Install with: pip install onnx skl2onnx onnxruntime")
 
-try:
-    from .utils import Timer
-    from .trainer import TrainingResults
-except ImportError:
-    from utils import Timer
-    from trainer import TrainingResults
+from ..utils import Timer
+from .trainer import TrainingResults
 
 logger = logging.getLogger(__name__)
 
@@ -323,10 +319,7 @@ class ONNXInferenceEngine:
         Returns:
             Summary of the inference process
         """
-        try:
-            from .loader import load_csv
-        except ImportError:
-            from loader import load_csv
+        from .loader import load_csv
         
         csv_path = Path(csv_path)
         output_path = Path(output_path)

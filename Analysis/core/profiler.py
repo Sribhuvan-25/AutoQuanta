@@ -9,28 +9,16 @@ from typing import Dict, List, Any, Optional, Union
 from pathlib import Path
 import logging
 
-try:
-    from .utils import (
-        ColumnInfo, 
-        DataProfile, 
-        memory_usage_mb, 
-        safe_divide,
-        Timer,
-        detect_task_type,
-        print_data_summary
-    )
-    from .loader import DataLoader
-except ImportError:
-    from utils import (
-        ColumnInfo, 
-        DataProfile, 
-        memory_usage_mb, 
-        safe_divide,
-        Timer,
-        detect_task_type,
-        print_data_summary
-    )
-    from loader import DataLoader
+from ..utils import (
+    ColumnInfo, 
+    DataProfile, 
+    memory_usage_mb, 
+    safe_divide,
+    Timer,
+    detect_task_type,
+    print_data_summary
+)
+from .loader import DataLoader
 
 logger = logging.getLogger(__name__)
 

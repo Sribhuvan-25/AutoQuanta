@@ -13,24 +13,14 @@ from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 import logging
 
-try:
-    from .utils import (
-        DataProfile, 
-        ColumnInfo, 
-        detect_task_type,
-        validate_column_exists,
-        Timer,
-        DEFAULT_CONFIG
-    )
-except ImportError:
-    from utils import (
-        DataProfile, 
-        ColumnInfo, 
-        detect_task_type,
-        validate_column_exists,
-        Timer,
-        DEFAULT_CONFIG
-    )
+from ..utils import (
+    DataProfile, 
+    ColumnInfo, 
+    detect_task_type,
+    validate_column_exists,
+    Timer,
+    DEFAULT_CONFIG
+)
 
 logger = logging.getLogger(__name__)
 

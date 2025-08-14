@@ -4,11 +4,14 @@ Core ML functionality for tabular data analysis and modeling.
 """
 
 # Import main classes and functions for easy access
-from .loader import DataLoader, load_csv, load_data
-from .profiler import DataProfiler, profile_csv, profile_dataframe, print_profile_summary
-from .preprocessor import AutoPreprocessor, preprocess_data, create_preprocessor_from_profile
-from .trainer import ModelTrainer, ModelEvaluator, train_models, evaluate_model
-from .exporter import ONNXExporter, ONNXInferenceEngine, export_model, load_onnx_model, predict_with_onnx
+from .core import (
+    DataLoader, load_csv, load_data,
+    DataProfiler, profile_csv, profile_dataframe, print_profile_summary,
+    AutoPreprocessor, preprocess_data, create_preprocessor_from_profile,
+    ModelTrainer, ModelEvaluator, train_models, evaluate_model,
+    ONNXExporter, ONNXInferenceEngine, export_model, load_onnx_model, predict_with_onnx
+)
+
 from .utils import (
     DataProfile, 
     ColumnInfo, 

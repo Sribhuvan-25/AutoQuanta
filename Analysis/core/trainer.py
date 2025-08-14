@@ -18,24 +18,14 @@ import logging
 import time
 from dataclasses import dataclass
 
-try:
-    from .utils import (
-        ModelResult, 
-        TrainingConfig, 
-        Timer,
-        DEFAULT_MODEL_PARAMS,
-        detect_task_type
-    )
-    from .preprocessor import AutoPreprocessor
-except ImportError:
-    from utils import (
-        ModelResult, 
-        TrainingConfig, 
-        Timer,
-        DEFAULT_MODEL_PARAMS,
-        detect_task_type
-    )
-    from preprocessor import AutoPreprocessor
+from ..utils import (
+    ModelResult, 
+    TrainingConfig, 
+    Timer,
+    DEFAULT_MODEL_PARAMS,
+    detect_task_type
+)
+from .preprocessor import AutoPreprocessor
 
 logger = logging.getLogger(__name__)
 

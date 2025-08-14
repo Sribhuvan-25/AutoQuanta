@@ -9,26 +9,15 @@ from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, Union
 import logging
 
-try:
-    from .utils import (
-        validate_file_path, 
-        memory_usage_mb, 
-        get_sample_data, 
-        Timer,
-        format_bytes,
-        SUPPORTED_EXTENSIONS,
-        DEFAULT_CONFIG
-    )
-except ImportError:
-    from utils import (
-        validate_file_path, 
-        memory_usage_mb, 
-        get_sample_data, 
-        Timer,
-        format_bytes,
-        SUPPORTED_EXTENSIONS,
-        DEFAULT_CONFIG
-    )
+from ..utils import (
+    validate_file_path, 
+    memory_usage_mb, 
+    get_sample_data, 
+    Timer,
+    format_bytes,
+    SUPPORTED_EXTENSIONS,
+    DEFAULT_CONFIG
+)
 
 logger = logging.getLogger(__name__)
 
