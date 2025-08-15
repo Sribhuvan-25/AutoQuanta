@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
+import numpy as np
 
 
 @dataclass
@@ -50,16 +51,47 @@ class TrainingConfig:
 
 
 @dataclass
-class ModelResult:
-    """Results from training a single model."""
+class FoldResult:
+    """Results from a single CV fold."""
+    fold_idx: int
+    train_indices: List[int]
+    val_indices: List[int]
+    train_score: float
+    val_score: float
+    val_predictions: np.ndarray
+    val_actual: np.ndarray
+    val_probabilities: Optional[np.ndarray] = None  # For classification
+
+
+@dataclass
+class ModelTrainingResult:
+    """Complete training results for one model."""
     model_name: str
     model_object: Any
     cv_scores: List[float]
     mean_score: float
     std_score: float
+    fold_results: List[FoldResult]  # Detailed fold data
     feature_importance: Optional[Dict[str, float]]
     training_time: float
+    all_predictions: np.ndarray  # All CV predictions
+    all_actuals: np.ndarray      # All actual values
     best_params: Optional[Dict[str, Any]] = None
+    all_probabilities: Optional[np.ndarray] = None  # For classification
+
+
+@dataclass
+class TrainingResults:
+    """Complete results from training all models."""
+    best_model: ModelTrainingResult
+    all_models: List[ModelTrainingResult]
+    training_config: TrainingConfig
+    data_profile: DataProfile
+    
+    # Aggregated data for frontend
+    cv_summary: Dict[str, Any]  # Cross-validation summary
+    model_comparison: Dict[str, Any]  # Model comparison data
+    prediction_analysis: Dict[str, Any]  # Prediction vs actual analysis
 
 
 # Constants for model parameters

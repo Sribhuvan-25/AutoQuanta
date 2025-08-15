@@ -386,6 +386,59 @@ class DataProfiler:
             )
         
         return recommendations
+    
+    def generate_visualization_data(self, profile: DataProfile) -> Dict[str, Any]:
+        """Generate data for frontend visualization."""
+        viz_data = {
+            'feature_distributions': {},
+            'correlation_matrix': {},
+            'missing_data': {},
+            'data_overview': {}
+        }
+        
+        # Feature distributions
+        for col in profile.columns:
+            if col.dtype in ['int64', 'float64']:
+                # For numeric columns, include basic stats
+                viz_data['feature_distributions'][col.name] = {
+                    'dtype': col.dtype,
+                    'mean': col.stats.get('mean', 0),
+                    'std': col.stats.get('std', 0),
+                    'min': col.stats.get('min', 0),
+                    'max': col.stats.get('max', 0),
+                    'missing_count': col.missing_count,
+                    'missing_percentage': col.missing_percentage
+                }
+            else:
+                # For categorical columns
+                viz_data['feature_distributions'][col.name] = {
+                    'dtype': col.dtype,
+                    'unique_count': col.unique_count,
+                    'missing_count': col.missing_count,
+                    'missing_percentage': col.missing_percentage
+                }
+        
+        # Missing data pattern
+        viz_data['missing_data'] = {
+            'total_missing': profile.missing_summary['total_missing'],
+            'missing_percentage': profile.missing_summary['missing_percentage'],
+            'columns_with_missing': profile.missing_summary['columns_with_missing'],
+            'missing_by_column': {
+                col.name: col.missing_percentage 
+                for col in profile.columns 
+                if col.missing_count > 0
+            }
+        }
+        
+        # Data overview
+        viz_data['data_overview'] = {
+            'shape': profile.shape,
+            'memory_usage_mb': profile.memory_usage_mb,
+            'dtypes_summary': profile.dtypes_summary,
+            'warnings': profile.warnings
+        }
+        
+        return viz_data
 
 
 # Convenience functions
