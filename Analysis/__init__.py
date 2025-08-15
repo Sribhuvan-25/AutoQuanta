@@ -16,7 +16,9 @@ from .utils import (
     DataProfile, 
     ColumnInfo, 
     TrainingConfig, 
-    ModelResult,
+    FoldResult,
+    ModelTrainingResult,
+    TrainingResults,
     detect_task_type,
     check_target_variable,
     Timer
@@ -51,7 +53,9 @@ __all__ = [
     'DataProfile',
     'ColumnInfo',
     'TrainingConfig',
-    'ModelResult',
+    'FoldResult',
+    'ModelTrainingResult',
+    'TrainingResults',
     
     # Utilities
     'detect_task_type',

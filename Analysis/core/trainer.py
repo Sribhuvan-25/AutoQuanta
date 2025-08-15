@@ -19,7 +19,9 @@ import time
 from dataclasses import dataclass
 
 from ..utils import (
-    ModelResult, 
+    ModelTrainingResult, 
+    FoldResult,
+    TrainingResults,
     TrainingConfig, 
     Timer,
     DEFAULT_MODEL_PARAMS,
@@ -28,17 +30,6 @@ from ..utils import (
 from .preprocessor import AutoPreprocessor
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class TrainingResults:
-    """Complete results from model training."""
-    best_model: ModelResult
-    all_results: List[ModelResult]
-    training_config: TrainingConfig
-    preprocessing_report: Dict[str, Any]
-    feature_names: List[str]
-    training_summary: Dict[str, Any]
 
 
 class ModelTrainer:
@@ -91,13 +82,19 @@ class ModelTrainer:
             # Create training summary
             training_summary = self._create_training_summary(all_results, best_model, config)
             
+            # Generate visualization data
+            cv_summary = self._generate_cv_summary(all_results)
+            model_comparison = self._generate_model_comparison(all_results)
+            prediction_analysis = self._generate_prediction_analysis(all_results, config.task_type)
+            
             return TrainingResults(
                 best_model=best_model,
-                all_results=all_results,
+                all_models=all_results,
                 training_config=config,
-                preprocessing_report={},  # Will be filled by caller
-                feature_names=feature_names or [],
-                training_summary=training_summary
+                data_profile=None,  # Will be filled by caller
+                cv_summary=cv_summary,
+                model_comparison=model_comparison,
+                prediction_analysis=prediction_analysis
             )
     
     def train_from_dataframe(self,
@@ -114,6 +111,11 @@ class ModelTrainer:
             **kwargs
         )
         
+        # Profile data
+        from .profiler import DataProfiler
+        profiler = DataProfiler()
+        data_profile = profiler.profile_dataframe(df)
+        
         # Preprocess data
         preprocessor = AutoPreprocessor(target_column=target_column, task_type=config.task_type)
         X, y = preprocessor.fit_transform(df)
@@ -121,8 +123,8 @@ class ModelTrainer:
         # Train models
         results = self.train(X, y, config, preprocessor.get_feature_names_out())
         
-        # Add preprocessing report
-        results.preprocessing_report = preprocessor.get_preprocessing_report()
+        # Add data profile to results
+        results.data_profile = data_profile
         
         return results
     
@@ -146,7 +148,7 @@ class ModelTrainer:
                           y: np.ndarray,
                           config: TrainingConfig,
                           cv,
-                          feature_names: Optional[List[str]] = None) -> ModelResult:
+                          feature_names: Optional[List[str]] = None) -> ModelTrainingResult:
         
         start_time = time.time()
         
@@ -180,6 +182,50 @@ class ModelTrainer:
             n_jobs=self.n_jobs
         )
         
+        # Get detailed fold information
+        fold_results = []
+        all_predictions = []
+        all_actuals = []
+        all_probabilities = []
+        
+        for fold_idx, (train_idx, val_idx) in enumerate(cv.split(X, y)):
+            X_train, X_val = X[train_idx], X[val_idx]
+            y_train, y_val = y[train_idx], y[val_idx]
+            
+            # Train model on this fold
+            fold_model = model_class(**search.best_params_, random_state=self.random_state)
+            fold_model.fit(X_train, y_train)
+            
+            # Get predictions
+            val_predictions = fold_model.predict(X_val)
+            val_probabilities = None
+            if config.task_type == 'classification' and hasattr(fold_model, 'predict_proba'):
+                val_probabilities = fold_model.predict_proba(X_val)[:, 1]  # Probability of positive class
+            
+            # Calculate scores
+            scoring_metric = self._get_scoring_metric(config.task_type)
+            train_score = cross_val_score(fold_model, X_train, y_train, cv=2, scoring=scoring_metric).mean()
+            val_score = cross_val_score(fold_model, X_val, y_val, cv=2, scoring=scoring_metric).mean()
+            
+            # Store fold results
+            fold_result = FoldResult(
+                fold_idx=fold_idx,
+                train_indices=train_idx.tolist(),
+                val_indices=val_idx.tolist(),
+                train_score=train_score,
+                val_score=val_score,
+                val_predictions=val_predictions,
+                val_probabilities=val_probabilities,
+                val_actual=y_val
+            )
+            fold_results.append(fold_result)
+            
+            # Collect all predictions for aggregated analysis
+            all_predictions.extend(val_predictions)
+            all_actuals.extend(y_val)
+            if val_probabilities is not None:
+                all_probabilities.extend(val_probabilities)
+        
         # Calculate feature importance
         feature_importance = self._calculate_feature_importance(
             best_model, feature_names
@@ -187,15 +233,19 @@ class ModelTrainer:
         
         training_time = time.time() - start_time
         
-        return ModelResult(
+        return ModelTrainingResult(
             model_name=model_name,
             model_object=best_model,
             cv_scores=cv_scores.tolist(),
             mean_score=cv_scores.mean(),
             std_score=cv_scores.std(),
+            fold_results=fold_results,
             feature_importance=feature_importance,
             training_time=training_time,
-            best_params=search.best_params_
+            best_params=search.best_params_,
+            all_predictions=np.array(all_predictions),
+            all_actuals=np.array(all_actuals),
+            all_probabilities=np.array(all_probabilities) if all_probabilities else None
         )
     
     def _get_model_class(self, model_name: str, task_type: str):
@@ -235,15 +285,13 @@ class ModelTrainer:
         else:
             return {f"feature_{i}": imp for i, imp in enumerate(importances.tolist())}
     
-    def _select_best_model(self, results: List[ModelResult], task_type: str) -> ModelResult:
+    def _select_best_model(self, results: List[ModelTrainingResult], task_type: str) -> ModelTrainingResult:
         
-        # For regression, we use negative MSE, so higher (less negative) is better
-        # For classification, higher is always better
         return max(results, key=lambda x: x.mean_score)
     
     def _create_training_summary(self, 
-                               all_results: List[ModelResult],
-                               best_model: ModelResult,
+                               all_results: List[ModelTrainingResult],
+                               best_model: ModelTrainingResult,
                                config: TrainingConfig) -> Dict[str, Any]:
         
         total_training_time = sum(result.training_time for result in all_results)
@@ -267,6 +315,65 @@ class ModelTrainer:
             'model_scores': model_scores,
             'feature_count': len(best_model.feature_importance) if best_model.feature_importance else 0
         }
+    
+    def _generate_cv_summary(self, all_results: List[ModelTrainingResult]) -> Dict[str, Any]:
+        """Generate cross-validation summary data for visualization."""
+        cv_data = {}
+        
+        for result in all_results:
+            model_name = result.model_name
+            cv_data[model_name] = {
+                'fold_scores': [fold.val_score for fold in result.fold_results],
+                'mean_score': result.mean_score,
+                'std_score': result.std_score,
+                'fold_details': [
+                    {
+                        'fold_idx': fold.fold_idx,
+                        'train_score': fold.train_score,
+                        'val_score': fold.val_score,
+                        'train_size': len(fold.train_indices),
+                        'val_size': len(fold.val_indices)
+                    }
+                    for fold in result.fold_results
+                ]
+            }
+        
+        return cv_data
+    
+    def _generate_model_comparison(self, all_results: List[ModelTrainingResult]) -> Dict[str, Any]:
+        """Generate model comparison data for visualization."""
+        comparison_data = {
+            'model_names': [result.model_name for result in all_results],
+            'mean_scores': [result.mean_score for result in all_results],
+            'std_scores': [result.std_score for result in all_results],
+            'training_times': [result.training_time for result in all_results],
+            'feature_importance': {}
+        }
+        
+        # Add feature importance data
+        for result in all_results:
+            if result.feature_importance:
+                comparison_data['feature_importance'][result.model_name] = result.feature_importance
+        
+        return comparison_data
+    
+    def _generate_prediction_analysis(self, all_results: List[ModelTrainingResult], task_type: str) -> Dict[str, Any]:
+        """Generate prediction vs actual analysis data for visualization."""
+        analysis_data = {}
+        
+        for result in all_results:
+            model_name = result.model_name
+            analysis_data[model_name] = {
+                'predictions': result.all_predictions.tolist(),
+                'actuals': result.all_actuals.tolist(),
+                'residuals': (result.all_actuals - result.all_predictions).tolist()
+            }
+            
+            # Add probabilities for classification
+            if task_type == 'classification' and result.all_probabilities is not None:
+                analysis_data[model_name]['probabilities'] = result.all_probabilities.tolist()
+        
+        return analysis_data
 
 
 class ModelEvaluator:

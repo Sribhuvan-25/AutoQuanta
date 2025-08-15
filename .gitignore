@@ -2,3 +2,5 @@ Docs/
 .env
 Tests/
 Analysis/__pycache__/
+Analysis/**/__pycache__/
+
