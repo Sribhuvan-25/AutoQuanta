@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { FileUpload } from '@/components/common/FileUpload';
 import { DataTable } from '@/components/data/DataTable';
 import { ColumnCard } from '@/components/data/ColumnCard';
@@ -45,7 +45,7 @@ export default function EDAPage() {
     hasError
   } = useFileProcessingState();
 
-
+  // Define handleFileSelect first
   const handleFileSelect = useCallback(async (filePath: string, fileInfo?: { name: string; size: number; type: string }) => {
     try {
       startLoading('Processing your CSV file...');
@@ -143,6 +143,30 @@ export default function EDAPage() {
       failLoading(errorMessage);
     }
   }, [startLoading, updateProgress, nextStage, completeLoading, failLoading]);
+
+  // Check for uploaded file on page load
+  useEffect(() => {
+    const uploadedFileData = sessionStorage.getItem('uploadedFile');
+    if (uploadedFileData && !processedData && !isLoading) {
+      try {
+        const fileInfo = JSON.parse(uploadedFileData);
+        console.log('Auto-processing uploaded file:', fileInfo);
+        
+        // Auto-start processing the uploaded file
+        handleFileSelect(fileInfo.path, {
+          name: fileInfo.name,
+          size: fileInfo.size,
+          type: fileInfo.type
+        });
+        
+        // Clear from session storage after processing
+        sessionStorage.removeItem('uploadedFile');
+      } catch (error) {
+        console.error('Error processing uploaded file data:', error);
+        sessionStorage.removeItem('uploadedFile');
+      }
+    }
+  }, [processedData, isLoading, handleFileSelect]);
 
   const handleFileUploadError = useCallback((error: string) => {
     setValidationErrors([error]);

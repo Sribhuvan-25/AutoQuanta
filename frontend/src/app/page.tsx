@@ -2,27 +2,27 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowRight, Brain, Zap, Shield, Upload } from 'lucide-react';
+import { ArrowRight, Brain, Zap, Shield, BarChart3, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { FileUpload } from '@/components/common/FileUpload';
 import { AppLayout } from '@/components/layout/AppLayout';
 
 export default function Home() {
-  const handleFileSelect = (filePath: string) => {
-    console.log('File selected:', filePath);
-    // In a real app, this would navigate to the EDA page with the file
-  };
-
   const features = [
     {
-      icon: Upload,
-      title: 'Upload & Explore',
-      description: 'Drag and drop your CSV files for instant data exploration and profiling.',
+      icon: FolderOpen,
+      title: 'Project Management',
+      description: 'Organize your data science projects with easy file management and version control.',
+      href: '/project'
+    },
+    {
+      icon: BarChart3,
+      title: 'Data Exploration',
+      description: 'Interactive data analysis with automatic profiling, visualizations, and insights.',
       href: '/eda'
     },
     {
       icon: Brain,
-      title: 'Train Models',
+      title: 'Model Training',
       description: 'Automatically train and compare multiple ML models with cross-validation.',
       href: '/train'
     },
@@ -50,8 +50,8 @@ export default function Home() {
               AutoQuanta
             </h1>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Your local-first desktop application for analysis and machine learning. 
-              Explore data, train models, and make predictions - all on your machine.
+              Your local-first desktop application for tabular machine learning. 
+              Upload CSV files, explore data, train models, and make predictions - all on your machine.
             </p>
           </div>
 
@@ -61,25 +61,20 @@ export default function Home() {
             </span>
             <span className="text-sm text-gray-500">No data leaves your computer</span>
           </div>
-        </div>
 
-        {/* Quick Start */}
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Start</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Upload a CSV file to begin exploring your data and training models.
-            </p>
-            <FileUpload
-              onFileSelect={handleFileSelect}
-              title="Upload your first CSV"
-              description="Start by uploading a CSV file to explore and analyze"
-            />
+          {/* Get Started Button */}
+          <div className="pt-4">
+            <Link href="/project">
+              <Button size="lg" className="text-lg px-8 py-3">
+                Get Started
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+            </Link>
           </div>
         </div>
 
         {/* Features Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {features.map((feature) => (
             <Link
               key={feature.title}
@@ -104,21 +99,31 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Project Management */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">Project Management</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                Create or open a project to organize your data, models, and results.
-              </p>
+        {/* How It Works */}
+        <div className="bg-white rounded-lg border border-gray-200 p-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">How It Works</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="text-center">
+              <div className="bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-4">
+                <span className="text-blue-600 font-bold text-lg">1</span>
+              </div>
+              <h3 className="font-semibold text-gray-900 mb-2">Create a Project</h3>
+              <p className="text-sm text-gray-600">Start by creating a new project and uploading your CSV data files.</p>
             </div>
-            <Link href="/project">
-              <Button>
-                Manage Projects
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
+            <div className="text-center">
+              <div className="bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-4">
+                <span className="text-blue-600 font-bold text-lg">2</span>
+              </div>
+              <h3 className="font-semibold text-gray-900 mb-2">Explore & Analyze</h3>
+              <p className="text-sm text-gray-600">Use our interactive tools to explore your data and understand patterns.</p>
+            </div>
+            <div className="text-center">
+              <div className="bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-4">
+                <span className="text-blue-600 font-bold text-lg">3</span>
+              </div>
+              <h3 className="font-semibold text-gray-900 mb-2">Train & Predict</h3>
+              <p className="text-sm text-gray-600">Train machine learning models and make predictions on new data.</p>
+            </div>
           </div>
         </div>
 
@@ -126,6 +131,9 @@ export default function Home() {
         <div className="text-center text-sm text-gray-500">
           <p>
             AutoQuanta v0 - Local-first machine learning for tabular data
+          </p>
+          <p className="mt-1">
+            Built with Next.js, Tauri, and Python
           </p>
         </div>
       </div>
