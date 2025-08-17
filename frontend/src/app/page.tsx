@@ -50,8 +50,8 @@ export default function Home() {
               AutoQuanta
             </h1>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Your local-first desktop application for tabular machine learning. 
-              Upload CSV files, explore data, train models, and make predictions - all on your machine.
+              Your local-first desktop application for analysis and machine learning. 
+              For now work with tabular data, explore data, train models, and make predictions - all on your machine.
             </p>
           </div>
 
@@ -126,9 +126,6 @@ export default function Home() {
         <div className="text-center text-sm text-gray-500">
           <p>
             AutoQuanta v0 - Local-first machine learning for tabular data
-          </p>
-          <p className="mt-1">
-            Built with Next.js, Tauri, and Python
           </p>
         </div>
       </div>
