@@ -51,7 +51,7 @@ export default function Home() {
             </h1>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
               Your local-first desktop application for analysis and machine learning. 
-              For now work with tabular data, explore data, train models, and make predictions - all on your machine.
+              Explore data, train models, and make predictions - all on your machine.
             </p>
           </div>
 
