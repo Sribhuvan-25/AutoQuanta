@@ -21,7 +21,10 @@ export function DataTable({ data, maxRows = 100, className }: DataTableProps) {
   const rowsPerPage = 20;
 
   const headers = data?.[0] || [];
-  const rows = data?.slice(1, maxRows + 1) || [];
+  
+  const rows = React.useMemo(() => {
+    return data?.slice(1, maxRows + 1) || [];
+  }, [data, maxRows]);
 
   // Sorting logic
   const sortedRows = React.useMemo(() => {

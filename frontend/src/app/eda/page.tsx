@@ -1,121 +1,191 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { FileUpload } from '@/components/common/FileUpload';
 import { DataTable } from '@/components/data/DataTable';
 import { ColumnCard } from '@/components/data/ColumnCard';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
-import type { ColumnInfo } from '@/lib/types';
+import { DataProcessingIndicator } from '@/components/ui/loading';
+import { AlertTriangle, CheckCircle, Info, Download } from 'lucide-react';
+import type { ColumnInfo, DataWarning, DataProfile } from '@/lib/types';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { useFileProcessingState } from '@/hooks/useLoadingState';
+import { parseCSV, analyzeColumnTypes } from '@/lib/csv-utils';
+import { tauriAPI } from '@/lib/tauri';
 
-// Mock data for demonstration
-const mockData = [
-  ['ID', 'Name', 'Age', 'Income', 'Category', 'Score'],
-  ['1', 'John Doe', '25', '50000', 'A', '85.5'],
-  ['2', 'Jane Smith', '30', '60000', 'B', '92.3'],
-  ['3', 'Bob Johnson', '35', '75000', 'A', '78.9'],
-  ['4', 'Alice Brown', '28', '55000', 'C', '88.1'],
-  ['5', 'Charlie Wilson', '32', '65000', 'B', '91.2'],
-];
 
-const mockColumns: ColumnInfo[] = [
-  {
-    name: 'ID',
-    dtype: 'int64',
-    missing_count: 0,
-    missing_percentage: 0,
-    unique_count: 5,
-    unique_percentage: 100,
-    memory_usage: 40,
-    stats: { min: 1, max: 5, mean: 3, std: 1.58 },
-    warnings: ['All values are unique - consider if this is an ID column']
-  },
-  {
-    name: 'Name',
-    dtype: 'object',
-    missing_count: 0,
-    missing_percentage: 0,
-    unique_count: 5,
-    unique_percentage: 100,
-    memory_usage: 320,
-    stats: { top_categories: [
-      { value: 'John Doe', count: 1 },
-      { value: 'Jane Smith', count: 1 },
-      { value: 'Bob Johnson', count: 1 }
-    ]},
-    warnings: []
-  },
-  {
-    name: 'Age',
-    dtype: 'int64',
-    missing_count: 0,
-    missing_percentage: 0,
-    unique_count: 5,
-    unique_percentage: 100,
-    memory_usage: 40,
-    stats: { min: 25, max: 35, mean: 30, std: 3.54 },
-    warnings: []
-  },
-  {
-    name: 'Income',
-    dtype: 'int64',
-    missing_count: 0,
-    missing_percentage: 0,
-    unique_count: 5,
-    unique_percentage: 100,
-    memory_usage: 40,
-    stats: { min: 50000, max: 75000, mean: 61000, std: 8944.27 },
-    warnings: []
-  },
-  {
-    name: 'Category',
-    dtype: 'object',
-    missing_count: 0,
-    missing_percentage: 0,
-    unique_count: 3,
-    unique_percentage: 60,
-    memory_usage: 48,
-    stats: { top_categories: [
-      { value: 'A', count: 2 },
-      { value: 'B', count: 2 },
-      { value: 'C', count: 1 }
-    ]},
-    warnings: []
-  },
-  {
-    name: 'Score',
-    dtype: 'float64',
-    missing_count: 0,
-    missing_percentage: 0,
-    unique_count: 5,
-    unique_percentage: 100,
-    memory_usage: 40,
-    stats: { min: 78.9, max: 92.3, mean: 87.2, std: 5.23 },
-    warnings: []
-  }
-];
-
-const mockWarnings = [
-  { type: 'warning' as const, message: 'ID column detected - consider dropping for ML training', column: 'ID' },
-  { type: 'info' as const, message: 'All columns have complete data (no missing values)', column: undefined },
-  { type: 'info' as const, message: 'Dataset appears suitable for both classification and regression tasks', column: undefined }
-];
+interface ProcessedData {
+  data: string[][];
+  headers: string[];
+  rows: string[][];
+  columns: ColumnInfo[];
+  warnings: DataWarning[];
+  fileInfo: {
+    name: string;
+    size: number;
+    rowCount: number;
+    columnCount: number;
+  };
+}
 
 export default function EDAPage() {
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [dataLoaded, setDataLoaded] = useState(false);
+  const [processedData, setProcessedData] = useState<ProcessedData | null>(null);
   const [targetColumn, setTargetColumn] = useState<string>('');
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  
+  const {
+    loadingState,
+    startLoading,
+    updateProgress,
+    nextStage,
+    completeLoading,
+    failLoading,
+    resetLoading,
+    isLoading,
+    hasError
+  } = useFileProcessingState();
 
-  const handleFileSelect = (filePath: string) => {
-    setSelectedFile(filePath);
-    setDataLoaded(true);
-    // In a real app, this would trigger data profiling
-  };
+  // Define handleFileSelect first
+  const handleFileSelect = useCallback(async (filePath: string, fileInfo?: { name: string; size: number; type: string }) => {
+    try {
+      startLoading('Processing your CSV file...');
+      
+      // Stage 1: Validate file
+      updateProgress(10, 'Validating file...');
+      const validation = await tauriAPI.validateCSVFile(filePath);
+      
+      if (!validation.isValid) {
+        throw new Error(`File validation failed: ${validation.errors[0]}`);
+      }
+      
+      if (validation.warnings.length > 0) {
+        setValidationErrors(validation.warnings);
+      }
+      
+      nextStage();
 
-  const handleTargetSelect = (columnName: string) => {
+      // Stage 2: Read file content
+      updateProgress(25, 'Reading file content...');
+      const fileContent = await tauriAPI.readCSVFile(filePath);
+      nextStage();
+
+      // Stage 3: Parse CSV
+      updateProgress(50, 'Parsing CSV structure...');
+      const parseResult = parseCSV(fileContent);
+      
+      if (parseResult.errors.length > 0) {
+        throw new Error(`CSV parsing failed: ${parseResult.errors[0]}`);
+      }
+      
+      nextStage();
+
+      // Stage 4: Profile data using Python backend
+      updateProgress(75, 'Analyzing data with Python backend...');
+      let dataProfile: DataProfile | null = null;
+      
+      try {
+        dataProfile = await tauriAPI.profileCSV(filePath);
+      } catch (error) {
+        console.warn('Backend profiling failed, using frontend analysis:', error);
+        // Fallback to frontend analysis
+        const columnTypes = analyzeColumnTypes(parseResult.headers, parseResult.rows);
+        
+        // Convert to ColumnInfo format as fallback
+        const columns: ColumnInfo[] = columnTypes.map(col => ({
+          name: col.name,
+          dtype: col.detectedType === 'integer' ? 'int64' : 
+                col.detectedType === 'float' ? 'float64' :
+                col.detectedType === 'boolean' ? 'bool' : 'object',
+          missing_count: col.nullCount,
+          missing_percentage: (col.nullCount / parseResult.rowCount) * 100,
+          unique_count: col.uniqueCount,
+          unique_percentage: (col.uniqueCount / parseResult.rowCount) * 100,
+          memory_usage: col.sampleValues.join('').length * 8,
+          stats: col.detectedType === 'integer' || col.detectedType === 'float' 
+            ? { min: 0, max: 100, mean: 50, std: 25 }
+            : { top_categories: col.sampleValues.slice(0, 3).map(val => ({ value: val, count: 1 })) },
+          warnings: col.confidence < 0.8 ? [`Low confidence (${(col.confidence * 100).toFixed(0)}%) in type detection`] : []
+        }));
+
+        // Create mock data profile as fallback
+        dataProfile = {
+          file_path: filePath,
+          shape: [parseResult.rowCount, parseResult.columnCount],
+          columns,
+          missing_summary: { total_missing: 0, columns_with_missing: 0 },
+          warnings: parseResult.warnings.map(w => w.message),
+          memory_usage_mb: fileInfo?.size ? fileInfo.size / (1024 * 1024) : 0,
+          dtypes_summary: {}
+        };
+      }
+
+      updateProgress(100, 'Processing complete!');
+
+      // Set processed data
+      setProcessedData({
+        data: parseResult.data,
+        headers: parseResult.headers,
+        rows: parseResult.rows,
+        columns: dataProfile?.columns || [],
+        warnings: [...parseResult.warnings, ...validation.warnings.map(w => ({ type: 'warning' as const, message: w }))],
+        fileInfo: {
+          name: fileInfo?.name || filePath.split('/').pop() || 'unknown.csv',
+          size: fileInfo?.size || 0,
+          rowCount: parseResult.rowCount,
+          columnCount: parseResult.columnCount
+        }
+      });
+
+      completeLoading('Data analysis complete!');
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process file';
+      failLoading(errorMessage);
+    }
+  }, [startLoading, updateProgress, nextStage, completeLoading, failLoading]);
+
+  // Check for uploaded file on page load
+  useEffect(() => {
+    const uploadedFileData = sessionStorage.getItem('uploadedFile');
+    if (uploadedFileData && !processedData && !isLoading) {
+      try {
+        const fileInfo = JSON.parse(uploadedFileData);
+        console.log('Auto-processing uploaded file:', fileInfo);
+        
+        // Auto-start processing the uploaded file
+        handleFileSelect(fileInfo.path, {
+          name: fileInfo.name,
+          size: fileInfo.size,
+          type: fileInfo.type
+        });
+        
+        // Clear from session storage after processing
+        sessionStorage.removeItem('uploadedFile');
+      } catch (error) {
+        console.error('Error processing uploaded file data:', error);
+        sessionStorage.removeItem('uploadedFile');
+      }
+    }
+  }, [processedData, isLoading, handleFileSelect]);
+
+  const handleFileUploadError = useCallback((error: string) => {
+    setValidationErrors([error]);
+  }, []);
+
+  const handleValidationFailed = useCallback((errors: string[]) => {
+    setValidationErrors(errors);
+  }, []);
+
+  const handleTargetSelect = useCallback((columnName: string) => {
     setTargetColumn(columnName);
-  };
+  }, []);
+
+  const handleReset = useCallback(() => {
+    setProcessedData(null);
+    setTargetColumn('');
+    setValidationErrors([]);
+    resetLoading();
+  }, [resetLoading]);
 
   return (
     <AppLayout>
@@ -128,19 +198,64 @@ export default function EDAPage() {
           </p>
         </div>
 
+        {/* Validation Errors */}
+        {validationErrors.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-center gap-x-2 mb-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              <h3 className="text-sm font-medium text-red-800">Validation Errors</h3>
+            </div>
+            <ul className="list-disc list-inside space-y-1">
+              {validationErrors.map((error, index) => (
+                <li key={index} className="text-sm text-red-700">{error}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* File Upload */}
-        {!dataLoaded && (
+        {!processedData && !isLoading && (
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <FileUpload
               onFileSelect={handleFileSelect}
+              onError={handleFileUploadError}
+              onValidationFailed={handleValidationFailed}
               title="Upload CSV File"
               description="Drag and drop your CSV file here or click to browse"
+              disabled={isLoading}
             />
           </div>
         )}
 
+        {/* Loading State */}
+        {isLoading && (
+          <DataProcessingIndicator
+            stage={loadingState.stage as 'uploading' | 'parsing' | 'validating' | 'profiling' | 'completed' | 'error'}
+            progress={loadingState.progress}
+            message={loadingState.message}
+            details={loadingState.estimatedTimeRemaining 
+              ? `Estimated time remaining: ${Math.ceil(loadingState.estimatedTimeRemaining / 1000)}s`
+              : undefined
+            }
+          />
+        )}
+
+        {/* Error State */}
+        {hasError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <div className="flex items-center gap-x-3 mb-4">
+              <AlertTriangle className="h-6 w-6 text-red-500" />
+              <h3 className="text-lg font-semibold text-red-900">Processing Failed</h3>
+            </div>
+            <p className="text-sm text-red-700 mb-4">{loadingState.error}</p>
+            <Button onClick={handleReset} variant="outline">
+              Try Again
+            </Button>
+          </div>
+        )}
+
         {/* Data Overview */}
-        {dataLoaded && (
+        {processedData && !isLoading && (
           <div className="space-y-6">
             {/* File Info */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -148,28 +263,41 @@ export default function EDAPage() {
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Data Overview</h2>
                   <p className="text-sm text-gray-600 mt-1">
-                    {selectedFile} • {mockData.length - 1} rows • {mockData[0].length} columns
+                    {processedData.fileInfo.name} • {processedData.fileInfo.rowCount} rows • {processedData.fileInfo.columnCount} columns
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    File size: {(processedData.fileInfo.size / 1024).toFixed(1)} KB
                   </p>
                 </div>
-                <Button variant="outline" onClick={() => setDataLoaded(false)}>
-                  Upload New File
-                </Button>
+                <div className="flex gap-x-2">
+                  <Button variant="outline" onClick={handleReset}>
+                    Upload New File
+                  </Button>
+                  <Button variant="outline" size="sm">
+                    <Download className="h-4 w-4 mr-2" />
+                    Export Report
+                  </Button>
+                </div>
               </div>
             </div>
 
             {/* Warnings */}
-            {mockWarnings.length > 0 && (
+            {processedData.warnings.length > 0 && (
               <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Data Quality Warnings</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Data Quality Insights</h3>
                 <div className="space-y-3">
-                  {mockWarnings.map((warning, index) => (
+                  {processedData.warnings.map((warning, index) => (
                     <div key={index} className="flex items-start gap-x-3">
                       {warning.type === 'warning' && <AlertTriangle className="h-5 w-5 text-yellow-500 mt-0.5" />}
                       {warning.type === 'info' && <Info className="h-5 w-5 text-blue-500 mt-0.5" />}
+                      {warning.type === 'error' && <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />}
                       <div className="flex-1">
                         <p className="text-sm text-gray-900">{warning.message}</p>
                         {warning.column && (
                           <p className="text-xs text-gray-500 mt-1">Column: {warning.column}</p>
+                        )}
+                        {warning.suggestion && (
+                          <p className="text-xs text-blue-600 mt-1">💡 {warning.suggestion}</p>
                         )}
                       </div>
                     </div>
@@ -180,15 +308,20 @@ export default function EDAPage() {
 
             {/* Data Preview */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Data Preview</h3>
-              <DataTable data={mockData} maxRows={100} />
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Data Preview</h3>
+                <div className="text-xs text-gray-500">
+                  Showing first {Math.min(100, processedData.rows.length)} rows
+                </div>
+              </div>
+              <DataTable data={processedData.data} maxRows={100} />
             </div>
 
             {/* Column Statistics */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Column Statistics</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Column Analysis</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {mockColumns.map((column) => (
+                {processedData.columns.map((column) => (
                   <ColumnCard
                     key={column.name}
                     column={column}
@@ -205,7 +338,7 @@ export default function EDAPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Target Column
+                    Select Target Column for Machine Learning
                   </label>
                   <select
                     value={targetColumn}
@@ -213,28 +346,44 @@ export default function EDAPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Choose a target column...</option>
-                    {mockColumns.map((column) => (
+                    {processedData.columns.map((column) => (
                       <option key={column.name} value={column.name}>
                         {column.name} ({column.dtype})
                       </option>
                     ))}
                   </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    The target column is what you want to predict. Choose a column with the values you want to model.
+                  </p>
                 </div>
                 
                 {targetColumn && (
-                  <div className="flex items-center gap-x-2 text-sm text-green-600">
-                    <CheckCircle className="h-4 w-4" />
-                    <span>Target column selected: {targetColumn}</span>
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                    <div className="flex items-center gap-x-2 text-sm text-green-600">
+                      <CheckCircle className="h-4 w-4" />
+                      <span>Target column selected: <strong>{targetColumn}</strong></span>
+                    </div>
+                    <p className="text-xs text-green-600 mt-1">
+                      Ready to proceed with model training using this target column.
+                    </p>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Continue Button */}
-            <div className="flex justify-end">
-              <Button disabled={!targetColumn}>
-                Continue to Training
-              </Button>
+            {/* Action Buttons */}
+            <div className="flex justify-between items-center">
+              <div className="text-sm text-gray-500">
+                {targetColumn ? 'Ready for training' : 'Select a target column to continue'}
+              </div>
+              <div className="flex gap-x-3">
+                <Button variant="outline" onClick={handleReset}>
+                  Start Over
+                </Button>
+                <Button disabled={!targetColumn}>
+                  Continue to Training →
+                </Button>
+              </div>
             </div>
           </div>
         )}

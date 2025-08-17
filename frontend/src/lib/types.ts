@@ -104,11 +104,38 @@ export interface DataWarning {
   message: string;
   column?: string;
   suggestion?: string;
+  severity?: 'low' | 'medium' | 'high';
 }
 
 export interface FileUploadState {
   file: File | null;
+  filePath: string | null;
   isUploading: boolean;
   progress: number;
   error: string | null;
+  isValid: boolean;
+}
+
+export interface CSVParseOptions {
+  delimiter?: string;
+  hasHeader?: boolean;
+  encoding?: string;
+  skipRows?: number;
+  maxRows?: number;
+}
+
+export interface CSVValidationResult {
+  isValid: boolean;
+  errors: string[];
+  warnings: DataWarning[];
+  suggestions: string[];
+}
+
+export interface ColumnTypeInfo {
+  name: string;
+  detectedType: 'numeric' | 'integer' | 'float' | 'boolean' | 'date' | 'categorical' | 'text';
+  confidence: number;
+  nullCount: number;
+  uniqueCount: number;
+  sampleValues: string[];
 }
