@@ -98,7 +98,20 @@ export const processCSVFile = createAsyncThunk(
 
       // Stage 2: Read file content
       dispatch(updateProcessingStage({ stage: 'reading', progress: 25 }));
-      const fileContent = await tauriAPI.readCSVFile(filePath);
+      let fileContent: string;
+      
+      if (filePath.startsWith('browser://')) {
+        // Browser mode - read from localStorage
+        const fileName = filePath.replace('browser://', '');
+        const storedContent = localStorage.getItem(`file_content_${fileName}`);
+        if (!storedContent) {
+          throw new Error('File content not found in browser storage');
+        }
+        fileContent = storedContent;
+      } else {
+        // Tauri mode - read from file system
+        fileContent = await tauriAPI.readCSVFile(filePath);
+      }
 
       // Stage 3: Parse CSV
       dispatch(updateProcessingStage({ stage: 'parsing', progress: 50 }));

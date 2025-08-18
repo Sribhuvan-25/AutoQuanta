@@ -157,7 +157,7 @@ export const stopTraining = createAsyncThunk(
 
 export const loadTrainingResults = createAsyncThunk(
   'training/loadResults',
-  async (resultsPath: string, { rejectWithValue }) => {
+  async (_resultsPath: string, { rejectWithValue }) => {
     try {
       // In a real implementation, this would load results from a file
       const results = await tauriAPI.getTrainingResults();
