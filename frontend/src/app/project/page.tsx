@@ -20,10 +20,20 @@ interface Project {
   status: 'active' | 'archived';
 }
 
+interface Project {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  lastModified: string;
+  fileCount: number;
+  status: 'active' | 'archived';
+}
+
 export default function ProjectPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const [projects] = useState<Project[]>([
+  const [projects, setProjects] = useState<Project[]>([
     {
       id: '1',
       name: 'Sample Project',

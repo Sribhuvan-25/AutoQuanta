@@ -17,10 +17,20 @@ interface FileUploadState {
   isValid: boolean;
 }
 
+interface FileUploadState {
+  file: File | null;
+  filePath: string | null;
+  isUploading: boolean;
+  progress: number;
+  error: string | null;
+  isValid: boolean;
+}
+
 interface FileUploadProps {
   onFileSelect: (filePath: string, fileInfo?: { name: string; size: number; type: string }) => void;
   onError?: (error: string) => void;
   onValidationFailed?: (errors: string[]) => void;
+
   onProcessingComplete?: (processedData: unknown) => void;
   acceptedExtensions?: string[];
   maxSizeBytes?: number;
@@ -29,6 +39,7 @@ interface FileUploadProps {
   className?: string;
   disabled?: boolean;
   autoProcess?: boolean; // Automatically process the file through Redux
+
 }
 
 export function FileUpload({
@@ -36,6 +47,7 @@ export function FileUpload({
   onError,
   onValidationFailed,
   onProcessingComplete,
+
   acceptedExtensions = ['csv'],
   maxSizeBytes = 50 * 1024 * 1024, // 50MB default
   title = 'Upload File',
@@ -254,6 +266,7 @@ export function FileUpload({
       input.click();
     }
   }, [onFileSelect, onError, disabled, acceptedExtensions, validateFile, processFile, onValidationFailed, autoProcess, dispatch, onProcessingComplete]);
+
 
   // Drag and drop handlers
   const handleDragOver = useCallback((e: React.DragEvent) => {
