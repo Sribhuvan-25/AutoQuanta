@@ -7,6 +7,18 @@ import { ArrowRight, Plus, FolderOpen, Upload, BarChart3, Brain, Zap } from 'luc
 import { Button } from '@/components/ui/button';
 import { FileUpload } from '@/components/common/FileUpload';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { useAppSelector } from '@/store/hooks';
+import { selectIsProcessing, selectProcessingStage, selectCurrentDataset } from '@/store/slices/dataSlice';
+
+interface Project {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  lastModified: string;
+  fileCount: number;
+  status: 'active' | 'archived';
+}
 
 interface Project {
   id: string;
@@ -33,6 +45,11 @@ export default function ProjectPage() {
     }
   ]);
 
+  // Redux state
+  const isProcessing = useAppSelector(selectIsProcessing);
+  const processingStage = useAppSelector(selectProcessingStage);
+  const currentDataset = useAppSelector(selectCurrentDataset);
+
   const handleFileSelect = useCallback((filePath: string, fileInfo?: { name: string; size: number; type: string }) => {
     console.log('File selected:', filePath, fileInfo);
     
@@ -46,8 +63,11 @@ export default function ProjectPage() {
         uploadedAt: new Date().toISOString()
       }));
     }
-    
-    // Navigate to EDA page
+  }, []);
+
+  const handleProcessingComplete = useCallback((processedData: unknown) => {
+    console.log('File processing completed:', processedData);
+    // Navigate to EDA page once processing is complete
     router.push('/eda');
   }, [router]);
 
@@ -127,11 +147,41 @@ export default function ProjectPage() {
             onFileSelect={handleFileSelect}
             onError={handleFileError}
             onValidationFailed={handleValidationFailed}
+            onProcessingComplete={handleProcessingComplete}
             title="Upload CSV File"
-            description="Drag and drop your CSV file here or click to browse"
+            description={isProcessing 
+              ? `Processing file: ${processingStage}...` 
+              : "Drag and drop your CSV file here or click to browse"
+            }
             acceptedExtensions={['csv']}
             maxSizeBytes={50 * 1024 * 1024} // 50MB
+            disabled={isProcessing}
+            autoProcess={true}
           />
+
+          {/* Data Processing Status */}
+          {currentDataset && (
+            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
+              <div className="flex items-center gap-x-2">
+                <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+                <p className="text-sm text-green-700 font-medium">
+                  Data processed successfully: {currentDataset.fileName}
+                </p>
+              </div>
+              <p className="text-xs text-green-600 mt-1">
+                {currentDataset.metadata.rowCount.toLocaleString()} rows × {currentDataset.metadata.columnCount} columns
+              </p>
+              <div className="mt-2">
+                <Button 
+                  size="sm" 
+                  onClick={() => router.push('/eda')}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  View Data →
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Quick Actions */}

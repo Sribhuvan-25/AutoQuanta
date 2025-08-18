@@ -5,6 +5,17 @@ import { Upload, FileText, X, AlertCircle, Loader2, CheckCircle } from 'lucide-r
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { tauriAPI } from '@/lib/tauri';
+import { useAppDispatch } from '@/store/hooks';
+import { processCSVFile } from '@/store/slices/dataSlice';
+
+interface FileUploadState {
+  file: File | null;
+  filePath: string | null;
+  isUploading: boolean;
+  progress: number;
+  error: string | null;
+  isValid: boolean;
+}
 
 interface FileUploadState {
   file: File | null;
@@ -19,25 +30,33 @@ interface FileUploadProps {
   onFileSelect: (filePath: string, fileInfo?: { name: string; size: number; type: string }) => void;
   onError?: (error: string) => void;
   onValidationFailed?: (errors: string[]) => void;
+
+  onProcessingComplete?: (processedData: unknown) => void;
   acceptedExtensions?: string[];
   maxSizeBytes?: number;
   title?: string;
   description?: string;
   className?: string;
   disabled?: boolean;
+  autoProcess?: boolean; // Automatically process the file through Redux
+
 }
 
 export function FileUpload({
   onFileSelect,
   onError,
   onValidationFailed,
+  onProcessingComplete,
+
   acceptedExtensions = ['csv'],
   maxSizeBytes = 50 * 1024 * 1024, // 50MB default
   title = 'Upload File',
   description = 'Drag and drop a file here, or click to browse',
   className,
-  disabled = false
+  disabled = false,
+  autoProcess = true
 }: FileUploadProps) {
+  const dispatch = useAppDispatch();
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadState, setUploadState] = useState<FileUploadState>({
     file: null,
@@ -83,29 +102,70 @@ export function FileUpload({
     }));
 
     try {
-      // Simulate upload progress
-      for (let i = 0; i <= 100; i += 10) {
-        setUploadState(prev => ({ ...prev, progress: i }));
-        await new Promise(resolve => setTimeout(resolve, 50));
+      setUploadState(prev => ({ ...prev, progress: 10 }));
+      
+      // Read file content
+      const fileContent = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsText(file);
+      });
+
+      setUploadState(prev => ({ ...prev, progress: 30 }));
+
+      // Create a temporary file path for browser mode
+      const tempFilePath = `browser://${file.name}`;
+      
+      setUploadState(prev => ({ ...prev, progress: 50 }));
+
+      // If auto-processing is enabled, process through Redux
+      if (autoProcess) {
+        try {
+          // Dispatch Redux action to process the CSV
+          const resultAction = await dispatch(processCSVFile({
+            filePath: tempFilePath,
+            fileInfo: {
+              name: file.name,
+              size: file.size,
+              type: file.type
+            }
+          }));
+
+          if (processCSVFile.fulfilled.match(resultAction)) {
+            setUploadState(prev => ({ ...prev, progress: 90 }));
+            onProcessingComplete?.(resultAction.payload);
+          } else {
+            throw new Error('Failed to process CSV data');
+          }
+        } catch (reduxError) {
+          console.warn('Redux processing failed, continuing with basic upload:', reduxError);
+        }
       }
 
-      // For web version, we'll use the file directly
-      // In Tauri, this would be handled differently
-      const filePath = file.name; // Temporary - will be replaced with actual file handling
+      setUploadState(prev => ({ ...prev, progress: 100 }));
       
       setUploadState(prev => ({
         ...prev,
         file,
-        filePath,
+        filePath: tempFilePath,
         isUploading: false,
         isValid: true
       }));
 
-      onFileSelect(filePath, {
+      // Store the file content in localStorage for now (since we can't write to disk in browser)
+      try {
+        localStorage.setItem(`file_content_${file.name}`, fileContent);
+      } catch (storageError) {
+        console.warn('Failed to store file content in localStorage:', storageError);
+      }
+
+      onFileSelect(tempFilePath, {
         name: file.name,
         size: file.size,
         type: file.type
       });
+
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to process file';
       setUploadState(prev => ({
@@ -115,31 +175,98 @@ export function FileUpload({
       }));
       onError?.(errorMessage);
     }
-  }, [onFileSelect, onError]);
+  }, [onFileSelect, onError, onProcessingComplete, autoProcess, dispatch]);
 
-  // Handle file selection from browser dialog
+  // Handle file selection from browser dialog or Tauri dialog
   const handleFileSelect = useCallback(async () => {
     if (disabled) return;
     
-    try {
-      const filePath = await tauriAPI.selectCSVFile();
-      if (filePath) {
-        // In a real Tauri app, we'd get file info differently
-        // For now, we'll simulate it
-        const fileName = filePath.split('/').pop() || '';
-        setUploadState(prev => ({
-          ...prev,
-          filePath,
-          isValid: true
+    // Check if we're in Tauri environment
+    const isTauri = typeof window !== 'undefined' && (window as unknown as { __TAURI__?: boolean }).__TAURI__;
+    
+    if (isTauri) {
+      // Tauri file dialog
+      try {
+        setUploadState(prev => ({ ...prev, isUploading: true, progress: 0 }));
+        
+        const filePath = await tauriAPI.selectCSVFile();
+        if (filePath) {
+          setUploadState(prev => ({ ...prev, progress: 30 }));
+          
+          // Read file content through Tauri
+          const fileContent = await tauriAPI.readCSVFile(filePath);
+          setUploadState(prev => ({ ...prev, progress: 60 }));
+          
+          const fileName = filePath.split(/[/\\]/).pop() || '';
+          
+          // Process through Redux if enabled
+          if (autoProcess) {
+            try {
+              const resultAction = await dispatch(processCSVFile({
+                filePath,
+                fileInfo: {
+                  name: fileName,
+                  size: fileContent.length,
+                  type: 'text/csv'
+                }
+              }));
+
+              if (processCSVFile.fulfilled.match(resultAction)) {
+                onProcessingComplete?.(resultAction.payload);
+              }
+            } catch (reduxError) {
+              console.warn('Redux processing failed:', reduxError);
+            }
+          }
+          
+          setUploadState(prev => ({
+            ...prev,
+            filePath,
+            isValid: true,
+            isUploading: false,
+            progress: 100
+          }));
+          
+          onFileSelect(filePath, { 
+            name: fileName, 
+            size: fileContent.length, 
+            type: 'text/csv' 
+          });
+        } else {
+          setUploadState(prev => ({ ...prev, isUploading: false }));
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to select file';
+        setUploadState(prev => ({ 
+          ...prev, 
+          error: errorMessage, 
+          isUploading: false 
         }));
-        onFileSelect(filePath, { name: fileName, size: 0, type: 'text/csv' });
+        onError?.(errorMessage);
       }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to select file';
-      setUploadState(prev => ({ ...prev, error: errorMessage }));
-      onError?.(errorMessage);
+    } else {
+      // Browser file input
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = acceptedExtensions.map(ext => `.${ext}`).join(',');
+      
+      input.onchange = async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (file) {
+          const validation = validateFile(file);
+          if (!validation.isValid) {
+            setUploadState(prev => ({ ...prev, error: validation.errors[0] }));
+            onValidationFailed?.(validation.errors);
+            return;
+          }
+          await processFile(file);
+        }
+      };
+      
+      input.click();
     }
-  }, [onFileSelect, onError, disabled]);
+  }, [onFileSelect, onError, disabled, acceptedExtensions, validateFile, processFile, onValidationFailed, autoProcess, dispatch, onProcessingComplete]);
+
 
   // Drag and drop handlers
   const handleDragOver = useCallback((e: React.DragEvent) => {
