@@ -57,6 +57,16 @@ export interface ModelTrainingResult {
   all_probabilities?: number[];
 }
 
+export interface ModelPerformance {
+  model_name: string;
+  mean_score: number;
+  std_score: number;
+  cv_scores: number[];
+  training_time: number;
+  best_params?: Record<string, unknown>;
+  feature_importance?: Record<string, number>;
+}
+
 export interface TrainingResults {
   best_model: ModelTrainingResult;
   all_models: ModelTrainingResult[];
@@ -74,6 +84,8 @@ export interface ProjectMetadata {
   last_modified: string;
   data_files: string[];
   models: string[];
+  description?: string;
+  tags?: string[];
 }
 
 export interface AppState {
