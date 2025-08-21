@@ -4,9 +4,10 @@
  */
 
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import type { DataProfile, ColumnInfo, DataWarning } from '@/lib/types';
+import type { DataProfile, DataWarning } from '@/lib/types';
 import { tauriAPI } from '@/lib/tauri';
-import { parseCSV, analyzeColumnTypes } from '@/lib/csv-utils';
+import { parseCSV } from '@/lib/csv-utils';
+import { generateAdvancedProfile, type DataQualityReport, type StatisticalSummary, type AdvancedColumnProfile } from '@/lib/data-profiler';
 
 // Processed data interface
 interface ProcessedDataset {
@@ -17,7 +18,7 @@ interface ProcessedDataset {
   headers: string[];
   rows: string[][];
   profile: DataProfile | null;
-  columns: ColumnInfo[];
+  columns: AdvancedColumnProfile[];
   warnings: DataWarning[];
   metadata: {
     fileSize: number;
@@ -26,6 +27,9 @@ interface ProcessedDataset {
     processedAt: string;
     memoryUsage: number;
   };
+  // Advanced profiling results
+  statistical_summary: StatisticalSummary | null;
+  quality_report: DataQualityReport | null;
 }
 
 // Data state interface
@@ -121,49 +125,58 @@ export const processCSVFile = createAsyncThunk(
         throw new Error(`CSV parsing failed: ${parseResult.errors[0]}`);
       }
 
-      // Stage 4: Profile data
+      // Stage 4: Advanced data profiling
       dispatch(updateProcessingStage({ stage: 'profiling', progress: 75 }));
       let dataProfile: DataProfile | null = null;
+      let advancedProfile: { 
+        columns: AdvancedColumnProfile[]; 
+        statistical_summary: StatisticalSummary; 
+        quality_report: DataQualityReport; 
+        warnings: DataWarning[] 
+      };
       
       try {
+        // Try backend profiling first
         dataProfile = await tauriAPI.profileCSV(filePath);
+        
+        // Generate advanced frontend profiling regardless
+        advancedProfile = generateAdvancedProfile(parseResult.headers, parseResult.rows);
+        
       } catch (error) {
-        console.warn('Backend profiling failed, using frontend analysis:', error);
+        console.warn('Backend profiling failed, using advanced frontend analysis:', error);
         
-        // Fallback to frontend analysis
-        const columnTypes = analyzeColumnTypes(parseResult.headers, parseResult.rows);
+        // Fallback to comprehensive frontend analysis
+        advancedProfile = generateAdvancedProfile(parseResult.headers, parseResult.rows);
         
-        const columns: ColumnInfo[] = columnTypes.map(col => ({
-          name: col.name,
-          dtype: col.detectedType === 'integer' ? 'int64' : 
-                col.detectedType === 'float' ? 'float64' :
-                col.detectedType === 'boolean' ? 'bool' : 'object',
-          missing_count: col.nullCount,
-          missing_percentage: (col.nullCount / parseResult.rowCount) * 100,
-          unique_count: col.uniqueCount,
-          unique_percentage: (col.uniqueCount / parseResult.rowCount) * 100,
-          memory_usage: col.sampleValues.join('').length * 8,
-          stats: col.detectedType === 'integer' || col.detectedType === 'float' 
-            ? { min: 0, max: 100, mean: 50, std: 25 }
-            : { top_categories: col.sampleValues.slice(0, 3).map(val => ({ value: val, count: 1 })) },
-          warnings: col.confidence < 0.8 ? [`Low confidence (${(col.confidence * 100).toFixed(0)}%) in type detection`] : []
-        }));
-
+        // Create basic profile for compatibility
         dataProfile = {
           file_path: filePath,
           shape: [parseResult.rowCount, parseResult.columnCount],
-          columns,
-          missing_summary: { total_missing: 0, columns_with_missing: 0 },
-          warnings: parseResult.warnings.map(w => w.message),
+          columns: advancedProfile.columns.map(col => ({
+            name: col.name,
+            dtype: col.dtype,
+            missing_count: col.missing_count,
+            missing_percentage: col.missing_percentage,
+            unique_count: col.unique_count,
+            unique_percentage: col.unique_percentage,
+            memory_usage: col.memory_usage,
+            stats: col.stats,
+            warnings: col.warnings
+          })),
+          missing_summary: { 
+            total_missing: advancedProfile.statistical_summary.missing_data.total_missing,
+            columns_with_missing: advancedProfile.statistical_summary.missing_data.columns_with_missing.length 
+          },
+          warnings: [...parseResult.warnings.map(w => w.message), ...advancedProfile.warnings.map(w => w.message)],
           memory_usage_mb: fileInfo.size / (1024 * 1024),
-          dtypes_summary: {}
+          dtypes_summary: advancedProfile.statistical_summary.column_types
         };
       }
 
       // Stage 5: Complete processing
       dispatch(updateProcessingStage({ stage: 'completed', progress: 100 }));
 
-      // Create processed dataset
+      // Create processed dataset with advanced profiling
       const processedDataset: ProcessedDataset = {
         id: `${filePath}-${Date.now()}`,
         filePath,
@@ -172,15 +185,21 @@ export const processCSVFile = createAsyncThunk(
         headers: parseResult.headers,
         rows: parseResult.rows,
         profile: dataProfile,
-        columns: dataProfile?.columns || [],
-        warnings: [...parseResult.warnings, ...validation.warnings.map(w => ({ type: 'warning' as const, message: w }))],
+        columns: advancedProfile.columns,
+        warnings: [
+          ...parseResult.warnings, 
+          ...validation.warnings.map(w => ({ type: 'warning' as const, message: w })),
+          ...advancedProfile.warnings
+        ],
         metadata: {
           fileSize: fileInfo.size,
           rowCount: parseResult.rowCount,
           columnCount: parseResult.columnCount,
           processedAt: new Date().toISOString(),
           memoryUsage: fileInfo.size
-        }
+        },
+        statistical_summary: advancedProfile.statistical_summary,
+        quality_report: advancedProfile.quality_report
       };
 
       return processedDataset;
@@ -396,3 +415,12 @@ export const selectDataWarnings = (state: { data: DataState }) => state.data.war
 export const selectDataError = (state: { data: DataState }) => state.data.error;
 export const selectDatasetCache = (state: { data: DataState }) => state.data.datasetCache;
 export const selectCorrelationMatrix = (state: { data: DataState }) => state.data.correlationMatrix;
+
+// Advanced profiling selectors
+export const selectStatisticalSummary = (state: { data: DataState }) => state.data.currentDataset?.statistical_summary;
+export const selectQualityReport = (state: { data: DataState }) => state.data.currentDataset?.quality_report;
+export const selectAdvancedColumns = (state: { data: DataState }) => state.data.currentDataset?.columns;
+export const selectDataQualityIssues = (state: { data: DataState }) => state.data.currentDataset?.quality_report?.issues || [];
+export const selectDataQualityScore = (state: { data: DataState }) => state.data.currentDataset?.quality_report?.overall_score;
+export const selectMissingDataSummary = (state: { data: DataState }) => state.data.currentDataset?.statistical_summary?.missing_data;
+export const selectOutliersSummary = (state: { data: DataState }) => state.data.currentDataset?.statistical_summary?.outliers;

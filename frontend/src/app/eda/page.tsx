@@ -3,13 +3,13 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { FileUpload } from '@/components/common/FileUpload';
 import { DataTable } from '@/components/data/DataTable';
-import { ColumnCard } from '@/components/data/ColumnCard';
+import { AdvancedColumnCard } from '@/components/data/AdvancedColumnCard';
 import { ColumnDistribution } from '@/components/data/ColumnDistribution';
 import { CorrelationHeatmap } from '@/components/data/CorrelationHeatmap';
+import { DataQualityReport } from '@/components/data/DataQualityReport';
 import { Button } from '@/components/ui/button';
 import { DataProcessingIndicator } from '@/components/ui/loading';
 import { AlertTriangle, CheckCircle, Info, Download } from 'lucide-react';
-import type { ColumnInfo, DataWarning, DataProfile } from '@/lib/types';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { 
@@ -22,7 +22,10 @@ import {
   setTargetColumn as setDataTargetColumn,
   selectTargetColumn,
   processCSVFile,
-  clearCurrentDataset
+  clearCurrentDataset,
+  selectStatisticalSummary,
+  selectQualityReport,
+  selectAdvancedColumns
 } from '@/store/slices/dataSlice';
 
 
@@ -38,6 +41,9 @@ export default function EDAPage() {
   const dataError = useAppSelector(selectDataError);
   const dataWarnings = useAppSelector(selectDataWarnings);
   const targetColumn = useAppSelector(selectTargetColumn);
+  const statisticalSummary = useAppSelector(selectStatisticalSummary);
+  const qualityReport = useAppSelector(selectQualityReport);
+  const advancedColumns = useAppSelector(selectAdvancedColumns);
 
   // Handle file selection through Redux
   const handleFileSelect = useCallback(async (filePath: string, fileInfo?: { name: string; size: number; type: string }) => {
@@ -221,12 +227,20 @@ export default function EDAPage() {
               <DataTable data={currentDataset.data} maxRows={100} />
             </div>
 
-            {/* Column Statistics */}
+            {/* Data Quality Report */}
+            {qualityReport && statisticalSummary && (
+              <DataQualityReport 
+                qualityReport={qualityReport}
+                statisticalSummary={statisticalSummary}
+              />
+            )}
+
+            {/* Advanced Column Analysis */}
             <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Column Analysis</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Advanced Column Analysis</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {currentDataset.columns.map((column) => (
-                  <ColumnCard
+                {(advancedColumns || currentDataset.columns).map((column) => (
+                  <AdvancedColumnCard
                     key={column.name}
                     column={column}
                     isSelected={targetColumn === column.name}
