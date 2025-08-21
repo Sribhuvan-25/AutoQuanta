@@ -4,6 +4,8 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { FileUpload } from '@/components/common/FileUpload';
 import { DataTable } from '@/components/data/DataTable';
 import { ColumnCard } from '@/components/data/ColumnCard';
+import { ColumnDistribution } from '@/components/data/ColumnDistribution';
+import { CorrelationHeatmap } from '@/components/data/CorrelationHeatmap';
 import { Button } from '@/components/ui/button';
 import { DataProcessingIndicator } from '@/components/ui/loading';
 import { AlertTriangle, CheckCircle, Info, Download } from 'lucide-react';
@@ -231,6 +233,41 @@ export default function EDAPage() {
                     onSelect={() => handleTargetSelect(column.name)}
                   />
                 ))}
+              </div>
+            </div>
+
+            {/* Data Visualizations */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Data Visualizations</h3>
+              
+              {/* Column Distributions */}
+              <div className="mb-8">
+                <h4 className="text-md font-medium text-gray-800 mb-4">Column Distributions</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {currentDataset.columns.slice(0, 6).map((column) => (
+                    <div key={column.name} className="bg-gray-50 rounded-lg p-4">
+                      <ColumnDistribution 
+                        column={column} 
+                        data={currentDataset.data}
+                      />
+                    </div>
+                  ))}
+                </div>
+                {currentDataset.columns.length > 6 && (
+                  <div className="text-center mt-4">
+                    <Button variant="outline" size="sm">
+                      Show All Distributions ({currentDataset.columns.length - 6} more)
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Correlation Analysis */}
+              <div>
+                <h4 className="text-md font-medium text-gray-800 mb-4">Correlation Analysis</h4>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <CorrelationHeatmap data={currentDataset.data} />
+                </div>
               </div>
             </div>
 
