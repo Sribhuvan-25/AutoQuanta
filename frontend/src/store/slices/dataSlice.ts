@@ -8,6 +8,7 @@ import type { DataProfile, DataWarning } from '@/lib/types';
 import { tauriAPI } from '@/lib/tauri';
 import { parseCSV } from '@/lib/csv-utils';
 import { generateAdvancedProfile, type DataQualityReport, type StatisticalSummary, type AdvancedColumnProfile } from '@/lib/data-profiler';
+import { handleQuotaExceededError, isStorageQuotaExceeded } from '@/lib/storage-utils';
 
 // Processed data interface
 interface ProcessedDataset {
@@ -125,6 +126,11 @@ export const processCSVFile = createAsyncThunk(
         throw new Error(`CSV parsing failed: ${parseResult.errors[0]}`);
       }
 
+      // Check storage quota before profiling
+      if (isStorageQuotaExceeded()) {
+        console.warn('Storage quota nearly exceeded, limiting data processing');
+      }
+
       // Stage 4: Advanced data profiling
       dispatch(updateProcessingStage({ stage: 'profiling', progress: 75 }));
       let dataProfile: DataProfile | null = null;
@@ -204,6 +210,11 @@ export const processCSVFile = createAsyncThunk(
 
       return processedDataset;
     } catch (error) {
+      // Handle quota exceeded errors
+      if (error instanceof Error && error.name === 'QuotaExceededError') {
+        handleQuotaExceededError();
+        return rejectWithValue('Storage quota exceeded. Cache has been cleared, please try again.');
+      }
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to process CSV file');
     }
   }

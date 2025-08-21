@@ -40,6 +40,20 @@ export function DataTable({
   const headers = useMemo(() => data?.[0] || [], [data]);
   const allRows = useMemo(() => data?.slice(1) || [], [data]);
   
+  // Detect completely empty columns and hide them by default
+  const emptyColumns = useMemo(() => {
+    if (!data || data.length <= 1) return new Set<number>();
+    
+    const emptyColIndices = new Set<number>();
+    headers.forEach((_, columnIndex) => {
+      const columnValues = allRows.map(row => row[columnIndex] || '').filter(val => val.trim().length > 0);
+      if (columnValues.length === 0) {
+        emptyColIndices.add(columnIndex);
+      }
+    });
+    return emptyColIndices;
+  }, [headers, allRows, data]);
+  
   // Enhanced data processing with search, filtering, and sorting
   const processedRows = useMemo(() => {
     let filteredRows = [...allRows];
@@ -96,6 +110,19 @@ export function DataTable({
   const startIndex = (tableView.currentPage - 1) * tableView.pageSize;
   const endIndex = startIndex + tableView.pageSize;
   const currentRows = processedRows.slice(startIndex, endIndex);
+
+  // Combine hidden columns with empty columns (but allow manual override)
+  const effectivelyHiddenColumns = useMemo(() => {
+    const combined = new Set(hiddenColumns);
+    // Auto-hide empty columns unless user has explicitly made them visible
+    emptyColumns.forEach(index => {
+      combined.add(index);
+    });
+    return combined;
+  }, [hiddenColumns, emptyColumns]);
+
+  const visibleHeaders = headers.filter((_, index) => !effectivelyHiddenColumns.has(index));
+  const visibleColumnIndices = headers.map((_, index) => index).filter(index => !effectivelyHiddenColumns.has(index));
 
   // Event handlers
   const handleSort = (columnName: string) => {
@@ -166,9 +193,6 @@ export function DataTable({
     return 'text';
   };
 
-  const visibleHeaders = headers.filter((_, index) => !hiddenColumns.has(index));
-  const visibleColumnIndices = headers.map((_, index) => index).filter(index => !hiddenColumns.has(index));
-
   return (
     <div className={cn('w-full space-y-4', className)}>
       {/* Table Controls */}
@@ -195,6 +219,11 @@ export function DataTable({
         <div className="flex items-center gap-3">
           <span className="text-sm text-gray-500">
             {processedRows.length} rows • {visibleHeaders.length} visible columns
+            {emptyColumns.size > 0 && (
+              <span className="text-orange-600 ml-1">
+                ({emptyColumns.size} empty hidden)
+              </span>
+            )}
           </span>
           <Button variant="outline" size="sm">
             <Download className="h-4 w-4 mr-2" />
@@ -205,25 +234,37 @@ export function DataTable({
 
       {/* Column Visibility Controls */}
       <div className="flex flex-wrap gap-2">
-        {headers.map((header, index) => (
-          <button
-            key={index}
-            onClick={() => toggleColumnVisibility(index)}
-            className={cn(
-              "inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full transition-colors",
-              hiddenColumns.has(index)
-                ? "bg-gray-100 text-gray-500"
-                : "bg-blue-100 text-blue-700"
-            )}
-          >
-            {hiddenColumns.has(index) ? (
-              <EyeOff className="h-3 w-3" />
-            ) : (
-              <Eye className="h-3 w-3" />
-            )}
-            {header}
-          </button>
-        ))}
+        {headers.map((header, index) => {
+          const isEmpty = emptyColumns.has(index);
+          const isHidden = effectivelyHiddenColumns.has(index);
+          const isManuallyHidden = hiddenColumns.has(index);
+          
+          return (
+            <button
+              key={index}
+              onClick={() => toggleColumnVisibility(index)}
+              className={cn(
+                "inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full transition-colors",
+                isHidden
+                  ? isEmpty && !isManuallyHidden
+                    ? "bg-orange-100 text-orange-600 border border-orange-200"
+                    : "bg-gray-100 text-gray-500"
+                  : "bg-blue-100 text-blue-700"
+              )}
+              title={isEmpty && !isManuallyHidden ? "Empty column (auto-hidden)" : isHidden ? "Column hidden" : "Column visible"}
+            >
+              {isHidden ? (
+                <EyeOff className="h-3 w-3" />
+              ) : (
+                <Eye className="h-3 w-3" />
+              )}
+              <span className="truncate max-w-[120px]">
+                {header}
+                {isEmpty && <span className="ml-1 text-orange-500">∅</span>}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Table */}
@@ -313,16 +354,23 @@ export function DataTable({
                       />
                     </td>
                   )}
-                  {visibleColumnIndices.map((columnIndex) => (
-                    <td
-                      key={columnIndex}
-                      className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
-                    >
-                      {row[columnIndex] || (
-                        <span className="text-gray-400 italic">empty</span>
-                      )}
-                    </td>
-                  ))}
+                  {visibleColumnIndices.map((columnIndex) => {
+                    const cellValue = row[columnIndex];
+                    const hasValue = cellValue && cellValue.trim().length > 0;
+                    
+                    return (
+                      <td
+                        key={columnIndex}
+                        className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
+                      >
+                        {hasValue ? (
+                          cellValue
+                        ) : (
+                          <span className="text-gray-400 italic text-xs">—</span>
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}

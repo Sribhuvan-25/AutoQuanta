@@ -148,9 +148,11 @@ export function DataQualityReport({ qualityReport, statisticalSummary, className
                   <div className="flex items-start gap-x-3">
                     <SeverityIcon className="h-5 w-5 mt-0.5" />
                     <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-medium">{issue.column}</h4>
-                        <div className="flex items-center gap-x-2 text-sm">
+                      <div className="flex items-start justify-between gap-x-3">
+                        <h4 className="font-medium truncate flex-1 min-w-0" title={issue.column}>
+                          {issue.column}
+                        </h4>
+                        <div className="flex items-center gap-x-2 text-sm flex-shrink-0">
                           <span className="capitalize">{issue.severity}</span>
                           <span>•</span>
                           <span>{issue.count} affected</span>

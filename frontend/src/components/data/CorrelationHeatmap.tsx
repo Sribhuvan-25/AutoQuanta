@@ -11,63 +11,100 @@ interface CorrelationHeatmapProps {
 interface CorrelationData {
   columns: string[];
   matrix: number[][];
+  totalNumericColumns: number;
 }
 
 export function CorrelationHeatmap({ data, className }: CorrelationHeatmapProps) {
-  const correlationData = useMemo((): CorrelationData | null => {
-    if (!data || data.length <= 1) return null;
+  // Memory-efficient correlation calculation directly from rows
+  const calculateCorrelationFromRows = (rows: string[][], indexX: number, indexY: number): number => {
+    const values: Array<{x: number, y: number}> = [];
     
-    const headers = data[0];
-    const rows = data.slice(1);
-    
-    // Find numeric columns
-    const numericColumns: { name: string; index: number; values: number[] }[] = [];
-    
-    headers.forEach((header, index) => {
-      const values = rows.map(row => parseFloat(row[index])).filter(v => !isNaN(v));
-      if (values.length > rows.length * 0.5) { // At least 50% numeric values
-        numericColumns.push({ name: header, index, values });
-      }
-    });
-    
-    if (numericColumns.length < 2) return null;
-    
-    // Calculate correlation matrix
-    const matrix: number[][] = [];
-    
-    for (let i = 0; i < numericColumns.length; i++) {
-      matrix[i] = [];
-      for (let j = 0; j < numericColumns.length; j++) {
-        if (i === j) {
-          matrix[i][j] = 1;
-        } else {
-          const correlation = calculateCorrelation(numericColumns[i].values, numericColumns[j].values);
-          matrix[i][j] = correlation;
-        }
+    // Extract and filter valid numeric pairs
+    for (const row of rows) {
+      const x = parseFloat(row[indexX]);
+      const y = parseFloat(row[indexY]);
+      if (!isNaN(x) && !isNaN(y)) {
+        values.push({ x, y });
       }
     }
     
-    return {
-      columns: numericColumns.map(col => col.name),
-      matrix
-    };
-  }, [data]);
-
-  const calculateCorrelation = (x: number[], y: number[]): number => {
-    if (x.length !== y.length || x.length === 0) return 0;
+    if (values.length < 2) return 0;
     
-    const n = x.length;
-    const sumX = x.reduce((a, b) => a + b, 0);
-    const sumY = y.reduce((a, b) => a + b, 0);
-    const sumXY = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
-    const sumXX = x.reduce((sum, xi) => sum + xi * xi, 0);
-    const sumYY = y.reduce((sum, yi) => sum + yi * yi, 0);
+    const n = values.length;
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0, sumYY = 0;
+    
+    // Single pass calculation
+    for (const {x, y} of values) {
+      sumX += x;
+      sumY += y;
+      sumXY += x * y;
+      sumXX += x * x;
+      sumYY += y * y;
+    }
     
     const numerator = n * sumXY - sumX * sumY;
     const denominator = Math.sqrt((n * sumXX - sumX * sumX) * (n * sumYY - sumY * sumY));
     
     return denominator === 0 ? 0 : numerator / denominator;
   };
+
+  const correlationData = useMemo((): CorrelationData | null => {
+    if (!data || data.length <= 1) return null;
+    
+    const headers = data[0];
+    const rows = data.slice(1);
+    
+    // Limit data size for performance - sample if too large
+    const maxRows = 1000;
+    const sampledRows = rows.length > maxRows ? 
+      rows.filter((_, index) => index % Math.ceil(rows.length / maxRows) === 0).slice(0, maxRows) : 
+      rows;
+    
+    // Find numeric columns (store indices only, not values)
+    const numericColumnIndices: { name: string; index: number }[] = [];
+    
+    headers.forEach((header, index) => {
+      const sampleValues = sampledRows.slice(0, 100).map(row => parseFloat(row[index]));
+      const numericCount = sampleValues.filter(v => !isNaN(v)).length;
+      if (numericCount > sampleValues.length * 0.5) { // At least 50% numeric values
+        numericColumnIndices.push({ name: header, index });
+      }
+    });
+    
+    if (numericColumnIndices.length < 2) return null;
+    
+    // Store original count for display
+    const totalNumericColumns = numericColumnIndices.length;
+    
+    // Limit to maximum 15 columns for better visualization
+    const limitedColumns = numericColumnIndices.slice(0, 15);
+    
+    // Calculate correlation matrix without storing large arrays
+    const matrix: number[][] = [];
+    
+    for (let i = 0; i < limitedColumns.length; i++) {
+      matrix[i] = [];
+      for (let j = 0; j < limitedColumns.length; j++) {
+        if (i === j) {
+          matrix[i][j] = 1;
+        } else {
+          // Calculate correlation on-demand without storing arrays
+          const correlation = calculateCorrelationFromRows(
+            sampledRows, 
+            limitedColumns[i].index, 
+            limitedColumns[j].index
+          );
+          matrix[i][j] = correlation;
+        }
+      }
+    }
+    
+    return {
+      columns: limitedColumns.map(col => col.name),
+      matrix,
+      totalNumericColumns
+    };
+  }, [data]);
 
   const getColorForCorrelation = (correlation: number): string => {
     const abs = Math.abs(correlation);
@@ -96,6 +133,11 @@ export function CorrelationHeatmap({ data, className }: CorrelationHeatmapProps)
         </h4>
         <p className="text-xs text-gray-500">
           {columns.length} numeric columns • Correlation coefficients (-1 to +1)
+          {correlationData && correlationData.totalNumericColumns > 15 && (
+            <span className="block text-orange-600 mt-1">
+              Showing first 15 of {correlationData.totalNumericColumns} numeric columns
+            </span>
+          )}
         </p>
       </div>
       
@@ -108,10 +150,11 @@ export function CorrelationHeatmap({ data, className }: CorrelationHeatmapProps)
                 {columns.map((col, index) => (
                   <th key={index} className="p-1 text-xs font-medium text-gray-700">
                     <div 
-                      className="w-20 truncate"
+                      className="w-24 truncate transform -rotate-45 origin-bottom-left"
                       title={col}
+                      style={{ height: '60px', lineHeight: '60px' }}
                     >
-                      {col}
+                      {col.length > 15 ? `${col.substring(0, 12)}...` : col}
                     </div>
                   </th>
                 ))}
@@ -122,10 +165,10 @@ export function CorrelationHeatmap({ data, className }: CorrelationHeatmapProps)
                 <tr key={rowIndex}>
                   <td className="p-1 text-xs font-medium text-gray-700 text-right pr-2">
                     <div 
-                      className="w-20 truncate"
+                      className="w-24 truncate"
                       title={rowCol}
                     >
-                      {rowCol}
+                      {rowCol.length > 15 ? `${rowCol.substring(0, 12)}...` : rowCol}
                     </div>
                   </td>
                   {columns.map((colCol, colIndex) => {

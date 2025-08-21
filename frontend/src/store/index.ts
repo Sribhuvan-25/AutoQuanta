@@ -37,9 +37,9 @@ const persistConfig = {
   key: 'autoquanta',
   version: 1,
   storage,
-  // Persist project, data, and settings - exclude UI and training state
-  whitelist: ['project', 'data', 'settings'],
-  blacklist: ['ui', 'training'], // UI and training state should not persist
+  // Persist only project and settings - exclude data to prevent quota issues
+  whitelist: ['project', 'settings'],
+  blacklist: ['ui', 'training', 'data'], // UI, training, and data state should not persist
 };
 
 // Create persisted reducer

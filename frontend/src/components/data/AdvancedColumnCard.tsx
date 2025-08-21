@@ -57,8 +57,8 @@ export function AdvancedColumnCard({ column, isSelected = false, onSelect, class
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
-          <h4 className="font-medium text-gray-900 truncate" title={column.name}>
-            {column.name}
+          <h4 className="font-medium text-gray-900 truncate text-sm leading-tight" title={column.name}>
+            {column.name.length > 25 ? `${column.name.substring(0, 22)}...` : column.name}
           </h4>
           <div className="flex items-center gap-x-2 mt-1">
             <span className={cn('px-2 py-1 text-xs font-medium rounded border', getTypeColor(column.dtype))}>

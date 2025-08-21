@@ -94,7 +94,7 @@ export function ColumnDistribution({ column, data, className }: ColumnDistributi
   return (
     <div className={cn('w-full h-64', className)}>
       <div className="mb-3">
-        <h4 className="text-sm font-medium text-gray-900 mb-1">
+        <h4 className="text-sm font-medium text-gray-900 mb-1 truncate" title={column.name}>
           {column.name} Distribution
         </h4>
         <p className="text-xs text-gray-500">

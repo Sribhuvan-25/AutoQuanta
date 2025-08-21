@@ -92,8 +92,38 @@ export function generateAdvancedProfile(
   quality_report: DataQualityReport;
   warnings: DataWarning[];
 } {
+  // Limit processing for large datasets to prevent memory issues
+  // Increased limits for scientific datasets like the one being tested
+  const maxRows = 10000;
+  const maxColumns = 100;
   const warnings: DataWarning[] = [];
   const qualityIssues: DataQualityIssue[] = [];
+  
+  // Store original sizes for warnings
+  const originalRowCount = rows.length;
+  const originalColumnCount = headers.length;
+  
+  if (originalRowCount > maxRows) {
+    // Sample the data to prevent memory issues
+    const sampleStep = Math.ceil(originalRowCount / maxRows);
+    rows = rows.filter((_, index) => index % sampleStep === 0).slice(0, maxRows);
+    warnings.push({
+      type: 'info',
+      message: `Large dataset detected. Analysis performed on a sample of ${maxRows} rows out of ${originalRowCount} total rows.`,
+      suggestion: 'For complete analysis of large datasets, consider processing in batches or using the backend analysis engine.'
+    });
+  }
+  
+  if (originalColumnCount > maxColumns) {
+    // Limit to first 50 columns
+    headers = headers.slice(0, maxColumns);
+    rows = rows.map(row => row.slice(0, maxColumns));
+    warnings.push({
+      type: 'info', 
+      message: `Large number of columns detected. Analysis limited to first ${maxColumns} columns.`,
+      suggestion: 'For scientific datasets with many features, consider feature selection or domain-specific analysis.'
+    });
+  }
 
   // Basic column analysis
   const basicColumnTypes = analyzeColumnTypes(headers, rows);
