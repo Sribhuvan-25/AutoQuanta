@@ -37,9 +37,9 @@ const persistConfig = {
   key: 'autoquanta',
   version: 1,
   storage,
-  // Only persist certain slices and exclude UI state
-  whitelist: ['project', 'settings'],
-  blacklist: ['ui'], // UI state should not persist
+  // Persist project, data, and settings - exclude UI and training state
+  whitelist: ['project', 'data', 'settings'],
+  blacklist: ['ui', 'training'], // UI and training state should not persist
 };
 
 // Create persisted reducer

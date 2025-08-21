@@ -121,7 +121,7 @@ export default function ProjectPage() {
         </div>
 
         {/* File Upload Section */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
           <div className="flex items-center gap-x-3 mb-4">
             <Upload className="h-6 w-6 text-blue-600" />
             <h2 className="text-lg font-semibold text-gray-900">Upload Data</h2>
@@ -185,7 +185,7 @@ export default function ProjectPage() {
         </div>
 
         {/* Quick Actions */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {quickActions.map((action) => (
@@ -214,7 +214,7 @@ export default function ProjectPage() {
         </div>
 
         {/* Recent Projects */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Recent Projects</h2>
             <Link href="/project" className="text-sm text-blue-600 hover:text-blue-700">
@@ -250,7 +250,7 @@ export default function ProjectPage() {
         </div>
 
         {/* Getting Started Guide */}
-        <div className="bg-blue-50 rounded-lg border border-blue-200 p-6">
+        <div className="bg-blue-50/80 backdrop-blur-sm rounded-lg border border-blue-200/50 shadow-sm p-6">
           <h2 className="text-lg font-semibold text-blue-900 mb-3">Getting Started</h2>
           <div className="space-y-3 text-sm text-blue-800">
             <p>1. <strong>Upload your data:</strong> Start by uploading a CSV file using the upload area above.</p>
