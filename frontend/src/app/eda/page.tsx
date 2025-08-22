@@ -3,170 +3,85 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { FileUpload } from '@/components/common/FileUpload';
 import { DataTable } from '@/components/data/DataTable';
-import { ColumnCard } from '@/components/data/ColumnCard';
+import { AdvancedColumnCard } from '@/components/data/AdvancedColumnCard';
+import { ColumnDistribution } from '@/components/data/ColumnDistribution';
+import { CorrelationHeatmap } from '@/components/data/CorrelationHeatmap';
+import { DataQualityReport } from '@/components/data/DataQualityReport';
 import { Button } from '@/components/ui/button';
 import { DataProcessingIndicator } from '@/components/ui/loading';
 import { AlertTriangle, CheckCircle, Info, Download } from 'lucide-react';
-import type { ColumnInfo, DataWarning, DataProfile } from '@/lib/types';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { useFileProcessingState } from '@/hooks/useLoadingState';
-import { parseCSV, analyzeColumnTypes } from '@/lib/csv-utils';
-import { tauriAPI } from '@/lib/tauri';
+import { useAppSelector, useAppDispatch } from '@/store/hooks';
+import { 
+  selectCurrentDataset, 
+  selectIsProcessing, 
+  selectProcessingStage, 
+  selectProcessingProgress,
+  selectDataError,
+  selectDataWarnings,
+  setTargetColumn as setDataTargetColumn,
+  selectTargetColumn,
+  processCSVFile,
+  clearCurrentDataset,
+  selectStatisticalSummary,
+  selectQualityReport,
+  selectAdvancedColumns
+} from '@/store/slices/dataSlice';
 
-
-interface ProcessedData {
-  data: string[][];
-  headers: string[];
-  rows: string[][];
-  columns: ColumnInfo[];
-  warnings: DataWarning[];
-  fileInfo: {
-    name: string;
-    size: number;
-    rowCount: number;
-    columnCount: number;
-  };
-}
 
 export default function EDAPage() {
-  const [processedData, setProcessedData] = useState<ProcessedData | null>(null);
-  const [targetColumn, setTargetColumn] = useState<string>('');
+  const dispatch = useAppDispatch();
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   
-  const {
-    loadingState,
-    startLoading,
-    updateProgress,
-    nextStage,
-    completeLoading,
-    failLoading,
-    resetLoading,
-    isLoading,
-    hasError
-  } = useFileProcessingState();
+  // Redux selectors
+  const currentDataset = useAppSelector(selectCurrentDataset);
+  const isProcessing = useAppSelector(selectIsProcessing);
+  const processingStage = useAppSelector(selectProcessingStage);
+  const processingProgress = useAppSelector(selectProcessingProgress);
+  const dataError = useAppSelector(selectDataError);
+  const dataWarnings = useAppSelector(selectDataWarnings);
+  const targetColumn = useAppSelector(selectTargetColumn);
+  const statisticalSummary = useAppSelector(selectStatisticalSummary);
+  const qualityReport = useAppSelector(selectQualityReport);
+  const advancedColumns = useAppSelector(selectAdvancedColumns);
 
-  // Define handleFileSelect first
+  // Handle file selection through Redux
   const handleFileSelect = useCallback(async (filePath: string, fileInfo?: { name: string; size: number; type: string }) => {
     try {
-      startLoading('Processing your CSV file...');
-      
-      // Stage 1: Validate file
-      updateProgress(10, 'Validating file...');
-      const validation = await tauriAPI.validateCSVFile(filePath);
-      
-      if (!validation.isValid) {
-        throw new Error(`File validation failed: ${validation.errors[0]}`);
+      if (fileInfo) {
+        await dispatch(processCSVFile({ filePath, fileInfo }));
       }
-      
-      if (validation.warnings.length > 0) {
-        setValidationErrors(validation.warnings);
-      }
-      
-      nextStage();
-
-      // Stage 2: Read file content
-      updateProgress(25, 'Reading file content...');
-      const fileContent = await tauriAPI.readCSVFile(filePath);
-      nextStage();
-
-      // Stage 3: Parse CSV
-      updateProgress(50, 'Parsing CSV structure...');
-      const parseResult = parseCSV(fileContent);
-      
-      if (parseResult.errors.length > 0) {
-        throw new Error(`CSV parsing failed: ${parseResult.errors[0]}`);
-      }
-      
-      nextStage();
-
-      // Stage 4: Profile data using Python backend
-      updateProgress(75, 'Analyzing data with Python backend...');
-      let dataProfile: DataProfile | null = null;
-      
-      try {
-        dataProfile = await tauriAPI.profileCSV(filePath);
-      } catch (error) {
-        console.warn('Backend profiling failed, using frontend analysis:', error);
-        // Fallback to frontend analysis
-        const columnTypes = analyzeColumnTypes(parseResult.headers, parseResult.rows);
-        
-        // Convert to ColumnInfo format as fallback
-        const columns: ColumnInfo[] = columnTypes.map(col => ({
-          name: col.name,
-          dtype: col.detectedType === 'integer' ? 'int64' : 
-                col.detectedType === 'float' ? 'float64' :
-                col.detectedType === 'boolean' ? 'bool' : 'object',
-          missing_count: col.nullCount,
-          missing_percentage: (col.nullCount / parseResult.rowCount) * 100,
-          unique_count: col.uniqueCount,
-          unique_percentage: (col.uniqueCount / parseResult.rowCount) * 100,
-          memory_usage: col.sampleValues.join('').length * 8,
-          stats: col.detectedType === 'integer' || col.detectedType === 'float' 
-            ? { min: 0, max: 100, mean: 50, std: 25 }
-            : { top_categories: col.sampleValues.slice(0, 3).map(val => ({ value: val, count: 1 })) },
-          warnings: col.confidence < 0.8 ? [`Low confidence (${(col.confidence * 100).toFixed(0)}%) in type detection`] : []
-        }));
-
-        // Create mock data profile as fallback
-        dataProfile = {
-          file_path: filePath,
-          shape: [parseResult.rowCount, parseResult.columnCount],
-          columns,
-          missing_summary: { total_missing: 0, columns_with_missing: 0 },
-          warnings: parseResult.warnings.map(w => w.message),
-          memory_usage_mb: fileInfo?.size ? fileInfo.size / (1024 * 1024) : 0,
-          dtypes_summary: {}
-        };
-      }
-
-      updateProgress(100, 'Processing complete!');
-
-      // Set processed data
-      setProcessedData({
-        data: parseResult.data,
-        headers: parseResult.headers,
-        rows: parseResult.rows,
-        columns: dataProfile?.columns || [],
-        warnings: [...parseResult.warnings, ...validation.warnings.map(w => ({ type: 'warning' as const, message: w }))],
-        fileInfo: {
-          name: fileInfo?.name || filePath.split('/').pop() || 'unknown.csv',
-          size: fileInfo?.size || 0,
-          rowCount: parseResult.rowCount,
-          columnCount: parseResult.columnCount
-        }
-      });
-
-      completeLoading('Data analysis complete!');
-      
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to process file';
-      failLoading(errorMessage);
+      console.error('Error processing file:', error);
     }
-  }, [startLoading, updateProgress, nextStage, completeLoading, failLoading]);
+  }, [dispatch]);
 
-  // Check for uploaded file on page load
+  // Check for uploaded file on page load (fallback for sessionStorage)
   useEffect(() => {
     const uploadedFileData = sessionStorage.getItem('uploadedFile');
-    if (uploadedFileData && !processedData && !isLoading) {
+    if (uploadedFileData && !currentDataset && !isProcessing) {
       try {
         const fileInfo = JSON.parse(uploadedFileData);
-        console.log('Auto-processing uploaded file:', fileInfo);
+        console.log('Auto-processing uploaded file from sessionStorage:', fileInfo);
         
-        // Auto-start processing the uploaded file
-        handleFileSelect(fileInfo.path, {
-          name: fileInfo.name,
-          size: fileInfo.size,
-          type: fileInfo.type
-        });
+        // Auto-start processing the uploaded file through Redux
+        dispatch(processCSVFile({ 
+          filePath: fileInfo.path, 
+          fileInfo: {
+            name: fileInfo.name,
+            size: fileInfo.size,
+            type: fileInfo.type
+          }
+        }));
         
-        // Clear from session storage after processing
+        // Clear from session storage after initiating processing
         sessionStorage.removeItem('uploadedFile');
       } catch (error) {
         console.error('Error processing uploaded file data:', error);
         sessionStorage.removeItem('uploadedFile');
       }
     }
-  }, [processedData, isLoading, handleFileSelect]);
+  }, [currentDataset, isProcessing, dispatch]);
 
   const handleFileUploadError = useCallback((error: string) => {
     setValidationErrors([error]);
@@ -177,15 +92,13 @@ export default function EDAPage() {
   }, []);
 
   const handleTargetSelect = useCallback((columnName: string) => {
-    setTargetColumn(columnName);
-  }, []);
+    dispatch(setDataTargetColumn(columnName));
+  }, [dispatch]);
 
   const handleReset = useCallback(() => {
-    setProcessedData(null);
-    setTargetColumn('');
+    dispatch(clearCurrentDataset());
     setValidationErrors([]);
-    resetLoading();
-  }, [resetLoading]);
+  }, [dispatch]);
 
   return (
     <AppLayout>
@@ -214,7 +127,7 @@ export default function EDAPage() {
         )}
 
         {/* File Upload */}
-        {!processedData && !isLoading && (
+        {!currentDataset && !isProcessing && (
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <FileUpload
               onFileSelect={handleFileSelect}
@@ -222,32 +135,29 @@ export default function EDAPage() {
               onValidationFailed={handleValidationFailed}
               title="Upload CSV File"
               description="Drag and drop your CSV file here or click to browse"
-              disabled={isLoading}
+              disabled={isProcessing}
+              autoProcess={false}
             />
           </div>
         )}
 
         {/* Loading State */}
-        {isLoading && (
+        {isProcessing && (
           <DataProcessingIndicator
-            stage={loadingState.stage as 'uploading' | 'parsing' | 'validating' | 'profiling' | 'completed' | 'error'}
-            progress={loadingState.progress}
-            message={loadingState.message}
-            details={loadingState.estimatedTimeRemaining 
-              ? `Estimated time remaining: ${Math.ceil(loadingState.estimatedTimeRemaining / 1000)}s`
-              : undefined
-            }
+            stage={processingStage as 'uploading' | 'parsing' | 'validating' | 'profiling' | 'completed' | 'error'}
+            progress={processingProgress}
+            message={`Processing CSV file: ${processingStage}...`}
           />
         )}
 
         {/* Error State */}
-        {hasError && (
+        {dataError && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-6">
             <div className="flex items-center gap-x-3 mb-4">
               <AlertTriangle className="h-6 w-6 text-red-500" />
               <h3 className="text-lg font-semibold text-red-900">Processing Failed</h3>
             </div>
-            <p className="text-sm text-red-700 mb-4">{loadingState.error}</p>
+            <p className="text-sm text-red-700 mb-4">{dataError}</p>
             <Button onClick={handleReset} variant="outline">
               Try Again
             </Button>
@@ -255,18 +165,18 @@ export default function EDAPage() {
         )}
 
         {/* Data Overview */}
-        {processedData && !isLoading && (
+        {currentDataset && !isProcessing && (
           <div className="space-y-6">
             {/* File Info */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Data Overview</h2>
                   <p className="text-sm text-gray-600 mt-1">
-                    {processedData.fileInfo.name} • {processedData.fileInfo.rowCount} rows • {processedData.fileInfo.columnCount} columns
+                    {currentDataset.fileName} • {currentDataset.metadata.rowCount.toLocaleString()} rows • {currentDataset.metadata.columnCount} columns
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    File size: {(processedData.fileInfo.size / 1024).toFixed(1)} KB
+                    File size: {(currentDataset.metadata.fileSize / 1024).toFixed(1)} KB
                   </p>
                 </div>
                 <div className="flex gap-x-2">
@@ -282,11 +192,11 @@ export default function EDAPage() {
             </div>
 
             {/* Warnings */}
-            {processedData.warnings.length > 0 && (
-              <div className="bg-white rounded-lg border border-gray-200 p-6">
+            {(dataWarnings.length > 0 || currentDataset.warnings.length > 0) && (
+              <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Data Quality Insights</h3>
                 <div className="space-y-3">
-                  {processedData.warnings.map((warning, index) => (
+                  {[...dataWarnings, ...currentDataset.warnings].map((warning, index) => (
                     <div key={index} className="flex items-start gap-x-3">
                       {warning.type === 'warning' && <AlertTriangle className="h-5 w-5 text-yellow-500 mt-0.5" />}
                       {warning.type === 'info' && <Info className="h-5 w-5 text-blue-500 mt-0.5" />}
@@ -307,22 +217,30 @@ export default function EDAPage() {
             )}
 
             {/* Data Preview */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Data Preview</h3>
                 <div className="text-xs text-gray-500">
-                  Showing first {Math.min(100, processedData.rows.length)} rows
+                  Showing first {Math.min(100, currentDataset.rows.length)} rows
                 </div>
               </div>
-              <DataTable data={processedData.data} maxRows={100} />
+              <DataTable data={currentDataset.data} maxRows={100} />
             </div>
 
-            {/* Column Statistics */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Column Analysis</h3>
+            {/* Data Quality Report */}
+            {qualityReport && statisticalSummary && (
+              <DataQualityReport 
+                qualityReport={qualityReport}
+                statisticalSummary={statisticalSummary}
+              />
+            )}
+
+            {/* Advanced Column Analysis */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Advanced Column Analysis</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {processedData.columns.map((column) => (
-                  <ColumnCard
+                {(advancedColumns || currentDataset.columns).map((column) => (
+                  <AdvancedColumnCard
                     key={column.name}
                     column={column}
                     isSelected={targetColumn === column.name}
@@ -332,8 +250,43 @@ export default function EDAPage() {
               </div>
             </div>
 
+            {/* Data Visualizations */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Data Visualizations</h3>
+              
+              {/* Column Distributions */}
+              <div className="mb-8">
+                <h4 className="text-md font-medium text-gray-800 mb-4">Column Distributions</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {currentDataset.columns.slice(0, 6).map((column) => (
+                    <div key={column.name} className="bg-gray-50 rounded-lg p-4">
+                      <ColumnDistribution 
+                        column={column} 
+                        data={currentDataset.data}
+                      />
+                    </div>
+                  ))}
+                </div>
+                {currentDataset.columns.length > 6 && (
+                  <div className="text-center mt-4">
+                    <Button variant="outline" size="sm">
+                      Show All Distributions ({currentDataset.columns.length - 6} more)
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Correlation Analysis */}
+              <div>
+                <h4 className="text-md font-medium text-gray-800 mb-4">Correlation Analysis</h4>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <CorrelationHeatmap data={currentDataset.data} />
+                </div>
+              </div>
+            </div>
+
             {/* Target Selection */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Target Column Selection</h3>
               <div className="space-y-4">
                 <div>
@@ -341,12 +294,12 @@ export default function EDAPage() {
                     Select Target Column for Machine Learning
                   </label>
                   <select
-                    value={targetColumn}
-                    onChange={(e) => setTargetColumn(e.target.value)}
+                    value={targetColumn || ''}
+                    onChange={(e) => handleTargetSelect(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Choose a target column...</option>
-                    {processedData.columns.map((column) => (
+                    {currentDataset.columns.map((column) => (
                       <option key={column.name} value={column.name}>
                         {column.name} ({column.dtype})
                       </option>
