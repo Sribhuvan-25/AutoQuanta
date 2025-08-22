@@ -57,7 +57,8 @@ const initialState: TrainingState = {
 // Async thunks for training operations
 export const startTraining = createAsyncThunk(
   'training/start',
-  async (config: TrainingConfig, { dispatch, rejectWithValue }) => {
+  async (params: { config: TrainingConfig; datasetData?: { data: string[][]; filePath: string } }, { dispatch, rejectWithValue }) => {
+    const { config, datasetData } = params;
     try {
       // Validate configuration
       if (!config.target_column) {
@@ -70,71 +71,58 @@ export const startTraining = createAsyncThunk(
 
       // Start training
       dispatch(updateTrainingStage({ stage: 'preparing', progress: 5 }));
-      const success = await tauriAPI.startTraining(config);
+      const success = await tauriAPI.startTraining(config, datasetData);
       
       if (!success) {
         throw new Error('Failed to start training');
       }
 
-      // Monitor training progress
-      dispatch(updateTrainingStage({ stage: 'training', progress: 10 }));
+      // Start monitoring training progress
+      const pollTrainingStatus = async (): Promise<TrainingResults> => {
+        return new Promise((resolve, reject) => {
+          let attempts = 0;
+          const maxAttempts = 300; // 5 minutes max
+          
+          const checkStatus = async () => {
+            try {
+              attempts++;
+              if (attempts > maxAttempts) {
+                reject(new Error('Training timeout'));
+                return;
+              }
+              
+              const status = await tauriAPI.getTrainingStatus();
+              
+              // Update progress in the store
+              dispatch(updateTrainingStage({ 
+                stage: status.status, 
+                progress: status.progress 
+              }));
+              
+              if (status.status === 'completed') {
+                const results = await tauriAPI.getTrainingResults();
+                if (results) {
+                  resolve(results);
+                } else {
+                  reject(new Error('Training completed but no results available'));
+                }
+              } else if (status.status === 'failed') {
+                reject(new Error(status.message || 'Training failed'));
+              } else {
+                // Continue polling
+                setTimeout(checkStatus, 500);
+              }
+            } catch (error) {
+              reject(error);
+            }
+          };
+          
+          // Start checking immediately
+          checkStatus();
+        });
+      };
       
-      // In a real implementation, this would poll for progress
-      // For now, simulate training progress
-      const progressInterval = setInterval(async () => {
-        try {
-          const status = await tauriAPI.getTrainingStatus();
-          
-          dispatch(updateTrainingStage({ 
-            stage: status.status, 
-            progress: status.progress 
-          }));
-          
-          if (status.status === 'completed' || status.status === 'failed') {
-            clearInterval(progressInterval);
-            
-            if (status.status === 'completed') {
-              const results = await tauriAPI.getTrainingResults();
-              if (results) {
-                return results;
-              } else {
-                throw new Error('Training completed but no results available');
-              }
-            } else {
-              throw new Error(status.message);
-            }
-          }
-        } catch (error) {
-          clearInterval(progressInterval);
-          throw error;
-        }
-      }, 1000);
-
-      // Return promise that resolves when training completes
-      return new Promise<TrainingResults>((resolve, reject) => {
-        const checkStatus = async () => {
-          try {
-            const status = await tauriAPI.getTrainingStatus();
-            
-            if (status.status === 'completed') {
-              const results = await tauriAPI.getTrainingResults();
-              if (results) {
-                resolve(results);
-              } else {
-                reject(new Error('Training completed but no results available'));
-              }
-            } else if (status.status === 'failed') {
-              reject(new Error(status.message));
-            } else {
-              setTimeout(checkStatus, 1000);
-            }
-          } catch (error) {
-            reject(error);
-          }
-        };
-        
-        checkStatus();
-      });
+      return await pollTrainingStatus();
       
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Training failed');
@@ -244,7 +232,7 @@ const trainingSlice = createSlice({
         state.trainingStage = 'starting';
         state.trainingProgress = 0;
         state.estimatedTimeRemaining = null;
-        state.config = action.meta.arg;
+        state.config = action.meta.arg.config;
         state.error = null;
         state.warnings = [];
       })

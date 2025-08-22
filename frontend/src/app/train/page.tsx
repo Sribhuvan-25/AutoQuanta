@@ -19,6 +19,7 @@ import {
   selectTrainingError,
   clearError
 } from '@/store/slices/trainingSlice';
+import { selectCurrentDataset } from '@/store/slices/dataSlice';
 import type { TrainingConfig as TrainingConfigType } from '@/lib/types';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -33,13 +34,21 @@ export default function TrainPage() {
   const modelComparison = useAppSelector(selectModelComparison);
   const bestModel = useAppSelector(selectBestModel);
   const trainingError = useAppSelector(selectTrainingError);
+  const currentDataset = useAppSelector(selectCurrentDataset);
   
   const [showResults, setShowResults] = useState(false);
 
   const handleStartTraining = async (config: TrainingConfigType) => {
     try {
       setShowResults(false);
-      const result = await dispatch(startTraining(config));
+      
+      // Prepare dataset data if available
+      const datasetData = currentDataset ? {
+        data: currentDataset.data,
+        filePath: currentDataset.filePath
+      } : undefined;
+      
+      const result = await dispatch(startTraining({ config, datasetData }));
       if (startTraining.fulfilled.match(result)) {
         setShowResults(true);
       }
