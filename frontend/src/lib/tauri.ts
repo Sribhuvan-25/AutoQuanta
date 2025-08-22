@@ -267,8 +267,7 @@ export const tauriAPI = {
       currentStage: 'starting'
     };
     
-    // Start progress simulation (since we don't have real progress streaming yet)
-    this.simulateTrainingProgress();
+    // Don't start simulated progress - we'll get real progress from Python
     
     // Create a temporary CSV file from the data
     const csvContent = this.dataArrayToCsv(datasetData.data);
@@ -430,11 +429,58 @@ export const tauriAPI = {
         
         console.log('[Python] Executing command:', command);
         
-        // Execute Python training
-        const result = childProcess.execSync(command, { 
-          encoding: 'utf8',
-          timeout: 300000, // 5 minute timeout
-          maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+        // Execute Python training with streaming output
+        const pythonProcess = childProcess.spawn('python3', [pythonPath, tempCsvPath, configJson], {
+          cwd: workingDirectory,
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+        
+        let outputBuffer = '';
+        let errorBuffer = '';
+        
+        // Handle stdout (includes both progress and final result)
+        pythonProcess.stdout.on('data', (data: Buffer) => {
+          const output = data.toString();
+          outputBuffer += output;
+          
+          // Parse progress events
+          const lines = output.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('PROGRESS:')) {
+              try {
+                const progressData = JSON.parse(line.substring(9));
+                this.handlePythonProgress(progressData);
+              } catch (error) {
+                console.warn('[Python] Failed to parse progress:', error);
+              }
+            }
+          }
+        });
+        
+        // Handle stderr
+        pythonProcess.stderr.on('data', (data: Buffer) => {
+          errorBuffer += data.toString();
+        });
+        
+        // Wait for process to complete
+        const result = await new Promise<string>((resolve, reject) => {
+          pythonProcess.on('close', (code) => {
+            if (code === 0) {
+              resolve(outputBuffer);
+            } else {
+              reject(new Error(`Python process exited with code ${code}: ${errorBuffer}`));
+            }
+          });
+          
+          pythonProcess.on('error', (error) => {
+            reject(error);
+          });
+          
+          // Timeout after 5 minutes
+          setTimeout(() => {
+            pythonProcess.kill();
+            reject(new Error('Python training timed out'));
+          }, 300000);
         });
         
         // Clean up temporary file
@@ -462,6 +508,22 @@ export const tauriAPI = {
     } else {
       throw new Error('Node.js environment not available');
     }
+  },
+
+  // Handle real-time progress from Python training
+  handlePythonProgress(progressData: any): void {
+    console.log('[Python] Progress:', progressData);
+    
+    // Update global training state with real progress
+    const state = (globalThis as { trainingState?: { status: string; progress: number; startTime: number; currentStage: string } }).trainingState;
+    if (state) {
+      state.status = progressData.stage;
+      state.progress = Math.round(progressData.progress);
+      state.currentStage = progressData.stage;
+    }
+    
+    // Store additional progress details
+    (globalThis as { lastPythonProgress?: any }).lastPythonProgress = progressData;
   },
 
   // Enhanced client-side analysis using real data
@@ -511,7 +573,7 @@ export const tauriAPI = {
     console.log('[Client] Feature analysis:', featureStats);
     
     // Generate realistic results based on actual data characteristics
-    const actualResults = this.generateRealisticResults(config, headers, featureStats, uniqueTargets.length);
+    const actualResults = this.generateRealisticResults(config, featureStats, uniqueTargets.length);
     
     // Store the enhanced results
     (globalThis as { pythonTrainingResults?: any }).pythonTrainingResults = actualResults;
@@ -520,7 +582,7 @@ export const tauriAPI = {
   },
 
   // Generate realistic results based on actual data analysis
-  generateRealisticResults(config: TrainingConfig, headers: string[], featureStats: any[], targetClasses: number): any {
+  generateRealisticResults(config: TrainingConfig, featureStats: any[], targetClasses: number): any {
     // Base scores on data quality and task complexity
     const dataQualityScore = this.assessDataQuality(featureStats);
     const taskComplexity = targetClasses > 2 ? 0.8 : 0.9; // Multiclass is harder
@@ -703,19 +765,28 @@ export const tauriAPI = {
         currentStage: 'idle' 
       };
       
+      // Check if we have real Python progress
+      const pythonProgress = (globalThis as { lastPythonProgress?: any }).lastPythonProgress;
+      
       const messages = {
-        'starting': 'Initializing training environment...',
-        'preparing': 'Preparing data and splitting into train/test sets...',
-        'training': 'Training machine learning models...',
-        'evaluating': 'Evaluating model performance with cross-validation...',
+        'loading': 'Loading and validating CSV data...',
+        'preparing': 'Preparing data and preprocessing features...',
+        'training': 'Training machine learning models with cross-validation...',
+        'evaluating': 'Evaluating model performance and selecting best model...',
         'completed': 'Training completed successfully!',
-        'idle': 'No training in progress'
+        'error': 'Training failed with errors',
+        'idle': 'No training in progress',
+        // Fallback messages
+        'starting': 'Initializing training environment...'
       };
+      
+      // Use real Python progress message if available
+      const currentMessage = pythonProgress?.message || messages[state.currentStage as keyof typeof messages] || 'Training in progress...';
       
       return { 
         status: state.status,
         progress: state.progress, 
-        message: messages[state.currentStage as keyof typeof messages] || 'Training in progress...'
+        message: currentMessage
       };
     }
   },
