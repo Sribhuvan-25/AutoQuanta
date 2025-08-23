@@ -41,7 +41,13 @@ export function TrainingResults({
     return null;
   }
 
-  const formatScore = (score: number): string => (score * 100).toFixed(2) + '%';
+  const formatScore = (score: number): string => {
+    if (results.training_config.task_type === 'regression') {
+      return score.toFixed(4);
+    } else {
+      return (score * 100).toFixed(2) + '%';
+    }
+  };
   const formatTime = (seconds: number): string => {
     if (seconds < 60) return `${seconds.toFixed(1)}s`;
     if (seconds < 3600) return `${(seconds / 60).toFixed(1)}m`;
@@ -49,9 +55,15 @@ export function TrainingResults({
   };
 
   const getScoreColor = (score: number): string => {
-    if (score >= 0.9) return 'text-green-600';
-    if (score >= 0.7) return 'text-yellow-600';
-    return 'text-red-600';
+    if (results.training_config.task_type === 'regression') {
+      if (score >= 0.8) return 'text-green-600';
+      if (score >= 0.5) return 'text-yellow-600';
+      return 'text-red-600';
+    } else {
+      if (score >= 0.9) return 'text-green-600';
+      if (score >= 0.7) return 'text-yellow-600';
+      return 'text-red-600';
+    }
   };
 
   const toggleModelExpansion = (modelName: string) => {
@@ -124,9 +136,16 @@ export function TrainingResults({
                       <h4 className="text-lg font-semibold text-gray-900">Best Model</h4>
                     </div>
                     <p className="text-2xl font-bold text-green-600">{bestModel.model_name}</p>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Cross-validation score: <span className="font-medium">{formatScore(bestModel.mean_score)}</span>
-                    </p>
+                    {results.training_config.task_type === 'regression' && bestModel.comprehensive_metrics ? (
+                      <div className="text-sm text-gray-600 mt-1 space-y-1">
+                        <p>R² Score: <span className="font-medium text-blue-600">{bestModel.comprehensive_metrics.r2_score?.toFixed(4)}</span></p>
+                        <p>MSE: <span className="font-medium text-orange-600">{bestModel.comprehensive_metrics.mse?.toFixed(6)}</span></p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-600 mt-1">
+                        Cross-validation score: <span className="font-medium">{formatScore(bestModel.mean_score)}</span>
+                      </p>
+                    )}
                   </div>
                   <div className="text-right space-y-2">
                     <div className="bg-white px-3 py-2 rounded-lg">
@@ -186,10 +205,19 @@ export function TrainingResults({
                       <div>
                         <h4 className="font-semibold text-gray-900">{model.model_name}</h4>
                         <p className="text-sm text-gray-600">
-                          Score: <span className={cn('font-medium', getScoreColor(model.mean_score))}>
+                          CV Score: <span className={cn('font-medium', getScoreColor(model.mean_score))}>
                             {formatScore(model.mean_score)} ± {formatScore(model.std_score)}
                           </span>
                         </p>
+                        {model.comprehensive_metrics && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            {results.training_config.task_type === 'regression' ? (
+                              <span>MSE: {model.comprehensive_metrics.mse?.toFixed(4)} | R²: {model.comprehensive_metrics.r2_score?.toFixed(4)}</span>
+                            ) : (
+                              <span>F1: {(model.comprehensive_metrics.f1_score * 100)?.toFixed(1)}% | Precision: {(model.comprehensive_metrics.precision * 100)?.toFixed(1)}%</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                     
@@ -228,7 +256,11 @@ export function TrainingResults({
                           'h-2 rounded-full transition-all',
                           index === 0 ? 'bg-green-500' : 'bg-blue-500'
                         )}
-                        style={{ width: `${model.mean_score * 100}%` }}
+                        style={{ 
+                          width: `${results.training_config.task_type === 'regression' 
+                            ? Math.max(0, Math.min(100, (model.mean_score + 1) * 50)) 
+                            : model.mean_score * 100}%` 
+                        }}
                       />
                     </div>
                   </div>
@@ -265,6 +297,60 @@ export function TrainingResults({
                                   <span className="text-sm font-mono ml-2">{importance.toFixed(3)}</span>
                                 </div>
                               ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Comprehensive Metrics */}
+                      {model.comprehensive_metrics && (
+                        <div>
+                          <h5 className="text-sm font-medium text-gray-700 mb-2">Detailed Metrics</h5>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            {results.training_config.task_type === 'regression' ? (
+                              <>
+                                <div className="bg-gray-50 p-2 rounded">
+                                  <span className="text-gray-600">MSE:</span>
+                                  <span className="font-mono ml-1">{model.comprehensive_metrics.mse?.toFixed(6)}</span>
+                                </div>
+                                <div className="bg-gray-50 p-2 rounded">
+                                  <span className="text-gray-600">RMSE:</span>
+                                  <span className="font-mono ml-1">{model.comprehensive_metrics.rmse?.toFixed(6)}</span>
+                                </div>
+                                <div className="bg-gray-50 p-2 rounded">
+                                  <span className="text-gray-600">MAE:</span>
+                                  <span className="font-mono ml-1">{model.comprehensive_metrics.mae?.toFixed(6)}</span>
+                                </div>
+                                <div className="bg-gray-50 p-2 rounded">
+                                  <span className="text-gray-600">R² Score:</span>
+                                  <span className="font-mono ml-1">{model.comprehensive_metrics.r2_score?.toFixed(6)}</span>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="bg-gray-50 p-2 rounded">
+                                  <span className="text-gray-600">Accuracy:</span>
+                                  <span className="font-mono ml-1">{(model.comprehensive_metrics.accuracy * 100)?.toFixed(2)}%</span>
+                                </div>
+                                <div className="bg-gray-50 p-2 rounded">
+                                  <span className="text-gray-600">F1 Score:</span>
+                                  <span className="font-mono ml-1">{(model.comprehensive_metrics.f1_score * 100)?.toFixed(2)}%</span>
+                                </div>
+                                <div className="bg-gray-50 p-2 rounded">
+                                  <span className="text-gray-600">Precision:</span>
+                                  <span className="font-mono ml-1">{(model.comprehensive_metrics.precision * 100)?.toFixed(2)}%</span>
+                                </div>
+                                <div className="bg-gray-50 p-2 rounded">
+                                  <span className="text-gray-600">Recall:</span>
+                                  <span className="font-mono ml-1">{(model.comprehensive_metrics.recall * 100)?.toFixed(2)}%</span>
+                                </div>
+                                {model.comprehensive_metrics.roc_auc && (
+                                  <div className="bg-gray-50 p-2 rounded col-span-2">
+                                    <span className="text-gray-600">ROC AUC:</span>
+                                    <span className="font-mono ml-1">{model.comprehensive_metrics.roc_auc?.toFixed(4)}</span>
+                                  </div>
+                                )}
+                              </>
+                            )}
                           </div>
                         </div>
                       )}

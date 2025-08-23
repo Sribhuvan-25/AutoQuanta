@@ -182,7 +182,7 @@ class ModelTrainer:
             n_jobs=self.n_jobs
         )
         
-        # Get detailed fold information
+        # Get detailed fold information with comprehensive metrics
         fold_results = []
         all_predictions = []
         all_actuals = []
@@ -202,10 +202,16 @@ class ModelTrainer:
             if config.task_type == 'classification' and hasattr(fold_model, 'predict_proba'):
                 val_probabilities = fold_model.predict_proba(X_val)[:, 1]  # Probability of positive class
             
-            # Calculate scores
-            scoring_metric = self._get_scoring_metric(config.task_type)
-            train_score = cross_val_score(fold_model, X_train, y_train, cv=2, scoring=scoring_metric).mean()
-            val_score = cross_val_score(fold_model, X_val, y_val, cv=2, scoring=scoring_metric).mean()
+            # Calculate comprehensive metrics
+            if config.task_type == 'classification':
+                from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
+                val_score = f1_score(y_val, val_predictions, average='weighted')
+                train_predictions = fold_model.predict(X_train)
+                train_score = f1_score(y_train, train_predictions, average='weighted')
+            else:
+                val_score = r2_score(y_val, val_predictions)
+                train_predictions = fold_model.predict(X_train)
+                train_score = r2_score(y_train, train_predictions)
             
             # Store fold results
             fold_result = FoldResult(
@@ -231,6 +237,14 @@ class ModelTrainer:
             best_model, feature_names
         )
         
+        # Calculate comprehensive metrics
+        comprehensive_metrics = self._calculate_comprehensive_metrics(
+            np.array(all_predictions), 
+            np.array(all_actuals), 
+            config.task_type,
+            np.array(all_probabilities) if all_probabilities else None
+        )
+        
         training_time = time.time() - start_time
         
         return ModelTrainingResult(
@@ -245,7 +259,8 @@ class ModelTrainer:
             best_params=search.best_params_,
             all_predictions=np.array(all_predictions),
             all_actuals=np.array(all_actuals),
-            all_probabilities=np.array(all_probabilities) if all_probabilities else None
+            all_probabilities=np.array(all_probabilities) if all_probabilities else None,
+            comprehensive_metrics=comprehensive_metrics
         )
     
     def _get_model_class(self, model_name: str, task_type: str):
@@ -267,9 +282,39 @@ class ModelTrainer:
     
     def _get_scoring_metric(self, task_type: str) -> str:
         if task_type == 'classification':
-            return 'roc_auc'  # Will fallback to accuracy for multiclass
+            return 'f1_weighted'
         else:
-            return 'neg_mean_squared_error'
+            return 'r2'
+    
+    def _calculate_comprehensive_metrics(self, 
+                                       predictions: np.ndarray, 
+                                       actuals: np.ndarray, 
+                                       task_type: str,
+                                       probabilities: Optional[np.ndarray] = None) -> Dict[str, float]:
+        """Calculate comprehensive metrics for model evaluation."""
+        
+        if task_type == 'classification':
+            metrics = {
+                'accuracy': accuracy_score(actuals, predictions),
+                'f1_score': f1_score(actuals, predictions, average='weighted'),
+                'precision': precision_score(actuals, predictions, average='weighted'),
+                'recall': recall_score(actuals, predictions, average='weighted')
+            }
+            
+            # Add ROC AUC for binary classification
+            if len(np.unique(actuals)) == 2 and probabilities is not None:
+                metrics['roc_auc'] = roc_auc_score(actuals, probabilities)
+                
+        else:  # regression
+            mse = mean_squared_error(actuals, predictions)
+            metrics = {
+                'mse': mse,
+                'rmse': np.sqrt(mse),
+                'mae': mean_absolute_error(actuals, predictions),
+                'r2_score': r2_score(actuals, predictions)
+            }
+        
+        return metrics
     
     def _calculate_feature_importance(self, 
                                     model, 

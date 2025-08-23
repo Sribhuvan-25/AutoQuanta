@@ -16,14 +16,12 @@ import {
 } from 'redux-persist';
 import storage from 'redux-persist/lib/storage';
 
-// Import slices
 import projectSlice from './slices/projectSlice';
 import dataSlice from './slices/dataSlice';
 import trainingSlice from './slices/trainingSlice';
 import uiSlice from './slices/uiSlice';
 import settingsSlice from './slices/settingsSlice';
 
-// Combine all reducers
 const rootReducer = combineReducers({
   project: projectSlice,
   data: dataSlice,
@@ -32,20 +30,17 @@ const rootReducer = combineReducers({
   settings: settingsSlice,
 });
 
-// Persist configuration
 const persistConfig = {
   key: 'autoquanta',
   version: 1,
   storage,
-  // Persist only project and settings - exclude data to prevent quota issues
   whitelist: ['project', 'settings'],
-  blacklist: ['ui', 'training', 'data'], // UI, training, and data state should not persist
+  blacklist: ['ui', 'training', 'data'],
 };
 
-// Create persisted reducer
+
 const persistedReducer = persistReducer(persistConfig, rootReducer);
 
-// Configure store
 export const store = configureStore({
   reducer: persistedReducer,
   middleware: (getDefaultMiddleware) =>
@@ -57,7 +52,7 @@ export const store = configureStore({
   devTools: process.env.NODE_ENV !== 'production',
 });
 
-// Export persistor for PersistGate
+// Export persistor for PersistGateÍ
 export const persistor = persistStore(store);
 
 // Export types
