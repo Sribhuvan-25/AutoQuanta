@@ -142,9 +142,12 @@ export function TrainingResults({
                         <p>MSE: <span className="font-medium text-orange-600">{bestModel.comprehensive_metrics.mse?.toFixed(6)}</span></p>
                       </div>
                     ) : (
-                      <p className="text-sm text-gray-600 mt-1">
-                        Cross-validation score: <span className="font-medium">{formatScore(bestModel.mean_score)}</span>
-                      </p>
+                      <div className="text-sm text-gray-600 mt-1 space-y-1">
+                        <p>Accuracy: <span className="font-medium text-blue-600">{formatScore(bestModel.mean_score)}</span></p>
+                        {bestModel.comprehensive_metrics?.f1_score && (
+                          <p>F1 Score: <span className="font-medium text-green-600">{(bestModel.comprehensive_metrics.f1_score * 100).toFixed(1)}%</span></p>
+                        )}
+                      </div>
                     )}
                   </div>
                   <div className="text-right space-y-2">
@@ -204,19 +207,44 @@ export function TrainingResults({
                       {index === 0 && <Trophy className="h-5 w-5 text-yellow-500" />}
                       <div>
                         <h4 className="font-semibold text-gray-900">{model.model_name}</h4>
-                        <p className="text-sm text-gray-600">
-                          CV Score: <span className={cn('font-medium', getScoreColor(model.mean_score))}>
-                            {formatScore(model.mean_score)} ± {formatScore(model.std_score)}
-                          </span>
-                        </p>
-                        {model.comprehensive_metrics && (
-                          <div className="text-xs text-gray-500 mt-1">
-                            {results.training_config.task_type === 'regression' ? (
-                              <span>MSE: {model.comprehensive_metrics.mse?.toFixed(4)} | R²: {model.comprehensive_metrics.r2_score?.toFixed(4)}</span>
-                            ) : (
-                              <span>F1: {(model.comprehensive_metrics.f1_score * 100)?.toFixed(1)}% | Precision: {(model.comprehensive_metrics.precision * 100)?.toFixed(1)}%</span>
-                            )}
-                          </div>
+                        {results.training_config.task_type === 'regression' ? (
+                          model.comprehensive_metrics ? (
+                            <div className="space-y-1">
+                              <p className="text-sm text-gray-600">
+                                R² Score: <span className={cn('font-medium', getScoreColor(model.comprehensive_metrics.r2_score || 0))}>
+                                  {model.comprehensive_metrics.r2_score?.toFixed(4) || 'N/A'}
+                                </span>
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                MSE: {model.comprehensive_metrics.mse?.toFixed(4) || 'N/A'} | RMSE: {model.comprehensive_metrics.rmse?.toFixed(4) || 'N/A'}
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-600">
+                              R² Score: <span className={cn('font-medium', getScoreColor(model.mean_score))}>
+                                {formatScore(model.mean_score)}
+                              </span>
+                            </p>
+                          )
+                        ) : (
+                          model.comprehensive_metrics ? (
+                            <div className="space-y-1">
+                              <p className="text-sm text-gray-600">
+                                Accuracy: <span className={cn('font-medium', getScoreColor(model.comprehensive_metrics.accuracy || 0))}>
+                                  {(model.comprehensive_metrics.accuracy * 100)?.toFixed(1) || 'N/A'}%
+                                </span>
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                F1: {(model.comprehensive_metrics.f1_score * 100)?.toFixed(1)}% | Precision: {(model.comprehensive_metrics.precision * 100)?.toFixed(1)}%
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-600">
+                              Accuracy: <span className={cn('font-medium', getScoreColor(model.mean_score))}>
+                                {formatScore(model.mean_score)}
+                              </span>
+                            </p>
+                          )
                         )}
                       </div>
                     </div>
@@ -268,16 +296,18 @@ export function TrainingResults({
                   {/* Expanded Details */}
                   {expandedModel === model.model_name && (
                     <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
-                      {/* CV Scores */}
+                      {/* Model Performance Scores */}
                       <div>
-                        <h5 className="text-sm font-medium text-gray-700 mb-2">Cross-Validation Scores</h5>
+                        <h5 className="text-sm font-medium text-gray-700 mb-2">
+                          {results.training_config.task_type === 'regression' ? 'Fold R² Scores' : 'Fold Accuracy Scores'}
+                        </h5>
                         <div className="flex gap-2 flex-wrap">
                           {model.cv_scores.map((score, idx) => (
                             <span
                               key={idx}
                               className="px-2 py-1 bg-gray-100 rounded text-xs font-mono"
                             >
-                              Fold {idx + 1}: {formatScore(score)}
+                              Fold {idx + 1}: {results.training_config.task_type === 'regression' ? score.toFixed(4) : formatScore(score)}
                             </span>
                           ))}
                         </div>
