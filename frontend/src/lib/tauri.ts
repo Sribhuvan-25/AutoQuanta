@@ -366,6 +366,131 @@ export const tauriAPI = {
   handlePythonProgress(progressData: any): void {
     console.log('[Python] Progress:', progressData);
     
+
+    // Update global training state with real progress
+    const state = (globalThis as { trainingState?: { status: string; progress: number; startTime: number; currentStage: string } }).trainingState;
+    if (state) {
+      state.status = progressData.stage;
+      state.progress = Math.round(progressData.progress);
+      state.currentStage = progressData.stage;
+      
+    // Check if we can access Node.js APIs (development server)
+    if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+      try {
+        // Dynamic import of Node.js modules
+        const fs = await import('fs').catch(() => null);
+        const childProcess = await import('child_process').catch(() => null);
+        const os = await import('os').catch(() => null);
+        const path = await import('path').catch(() => null);
+        
+        if (!fs || !childProcess || !os || !path) {
+          throw new Error('Node.js modules not available');
+        }
+        
+        // Create temporary file
+        const tempDir = os.default.tmpdir();
+        const tempCsvPath = path.default.join(tempDir, `autoquanta_temp_${Date.now()}.csv`);
+        
+        // Set working directory to project root
+        const workingDirectory = '/Users/sb/Analysis-App/AutoQuanta';
+        
+        console.log('[Python] Writing CSV to:', tempCsvPath);
+        fs.default.writeFileSync(tempCsvPath, csvContent, 'utf8');
+        
+        // Prepare command
+        const configJson = JSON.stringify(config);
+        const command = `cd "${workingDirectory}" && python3 "${pythonPath}" "${tempCsvPath}" '${configJson}'`;
+        
+        console.log('[Python] Executing command:', command);
+        
+        // Execute Python training with streaming output
+        const pythonProcess = childProcess.spawn('python3', [pythonPath, tempCsvPath, configJson], {
+          cwd: workingDirectory,
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+        
+        let outputBuffer = '';
+        let errorBuffer = '';
+        
+        // Handle stdout (includes both progress and final result)
+        pythonProcess.stdout.on('data', (data: Buffer) => {
+          const output = data.toString();
+          outputBuffer += output;
+          
+          // Parse progress events
+          const lines = output.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('PROGRESS:')) {
+              try {
+                const progressData = JSON.parse(line.substring(9));
+                this.handlePythonProgress(progressData);
+              } catch (error) {
+                console.warn('[Python] Failed to parse progress:', error);
+              }
+            }
+          }
+        });
+        
+        // Handle stderr
+        pythonProcess.stderr.on('data', (data: Buffer) => {
+          errorBuffer += data.toString();
+        });
+        
+        // Wait for process to complete
+        const result = await new Promise<string>((resolve, reject) => {
+          pythonProcess.on('close', (code) => {
+            if (code === 0) {
+              resolve(outputBuffer);
+            } else {
+              reject(new Error(`Python process exited with code ${code}: ${errorBuffer}`));
+            }
+          });
+          
+          pythonProcess.on('error', (error) => {
+            reject(error);
+          });
+          
+          // Timeout after 5 minutes
+          setTimeout(() => {
+            pythonProcess.kill();
+            reject(new Error('Python training timed out'));
+          }, 300000);
+        });
+        
+        // Clean up temporary file
+        try {
+          fs.default.unlinkSync(tempCsvPath);
+        } catch (cleanupError) {
+          console.warn('[Python] Failed to cleanup temp file:', cleanupError);
+        }
+        
+        // Parse result
+        const pythonResult = JSON.parse(result);
+        console.log('[Python] Training result:', pythonResult.success ? 'SUCCESS' : 'FAILED');
+        
+        if (pythonResult.success) {
+          console.log('[Python] Best model:', pythonResult.results.best_model.model_name);
+          console.log('[Python] Best score:', pythonResult.results.best_model.mean_score);
+        }
+        
+        return pythonResult;
+        
+      } catch (error) {
+        console.error('[Python] Subprocess execution failed:', error);
+        throw error;
+      }
+    } else {
+      throw new Error('Node.js environment not available');
+    }
+    
+    // Store additional progress details
+    (globalThis as { lastPythonProgress?: any }).lastPythonProgress = progressData;
+  },
+
+  // Handle real-time progress from Python training
+  handlePythonProgress(progressData: any): void {
+    console.log('[Python] Progress:', progressData);
+    
     // Update global training state with real progress
     const state = (globalThis as { trainingState?: { status: string; progress: number; startTime: number; currentStage: string } }).trainingState;
     if (state) {
@@ -450,6 +575,7 @@ export const tauriAPI = {
     }
     
     await new Promise(resolve => setTimeout(resolve, 1000));
+
     
     // Store the enhanced results
     (globalThis as { pythonTrainingResults?: any }).pythonTrainingResults = actualResults;
@@ -664,6 +790,7 @@ export const tauriAPI = {
         'training': 'Training machine learning models with cross-validation...',
         'evaluating': 'Evaluating model performance and selecting best model...',
         'exporting': 'Exporting trained model to ONNX format...',
+
         'completed': 'Training completed successfully!',
         'error': 'Training failed with errors',
         'idle': 'No training in progress',
