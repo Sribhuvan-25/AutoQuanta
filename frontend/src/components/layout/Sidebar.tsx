@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { X, Home, FolderOpen, BarChart3, Brain, Zap, Settings, ChevronRight } from 'lucide-react';
+import { X, Home, FolderOpen, BarChart3, Brain, Package, Zap, Settings, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
@@ -19,6 +19,7 @@ const navigation = [
   { name: 'Project', href: '/project', icon: FolderOpen },
   { name: 'Data Explorer', href: '/eda', icon: BarChart3 },
   { name: 'Training', href: '/train', icon: Brain },
+  { name: 'Models', href: '/models', icon: Package },
   { name: 'Predictions', href: '/predict', icon: Zap },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];

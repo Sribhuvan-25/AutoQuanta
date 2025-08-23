@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { FileUpload } from '@/components/common/FileUpload';
 import { DataTable } from '@/components/data/DataTable';
 import { AdvancedColumnCard } from '@/components/data/AdvancedColumnCard';
@@ -27,13 +28,14 @@ import {
   selectQualityReport,
   selectAdvancedColumns
 } from '@/store/slices/dataSlice';
+import { setTrainingConfig } from '@/store/slices/trainingSlice';
 
 
 export default function EDAPage() {
+  const router = useRouter();
   const dispatch = useAppDispatch();
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   
-  // Redux selectors
   const currentDataset = useAppSelector(selectCurrentDataset);
   const isProcessing = useAppSelector(selectIsProcessing);
   const processingStage = useAppSelector(selectProcessingStage);
@@ -45,7 +47,20 @@ export default function EDAPage() {
   const qualityReport = useAppSelector(selectQualityReport);
   const advancedColumns = useAppSelector(selectAdvancedColumns);
 
-  // Handle file selection through Redux
+  const handleContinueToTraining = () => {
+    if (targetColumn) {
+      dispatch(setTrainingConfig({
+        target_column: targetColumn,
+        task_type: 'classification',
+        test_size: 0.2,
+        cv_folds: 5,
+        random_seed: 42,
+        models_to_try: ['random_forest', 'gradient_boosting']
+      }));
+      router.push('/train');
+    }
+  };
+
   const handleFileSelect = useCallback(async (filePath: string, fileInfo?: { name: string; size: number; type: string }) => {
     try {
       if (fileInfo) {
@@ -333,7 +348,10 @@ export default function EDAPage() {
                 <Button variant="outline" onClick={handleReset}>
                   Start Over
                 </Button>
-                <Button disabled={!targetColumn}>
+                <Button 
+                  disabled={!targetColumn}
+                  onClick={handleContinueToTraining}
+                >
                   Continue to Training →
                 </Button>
               </div>

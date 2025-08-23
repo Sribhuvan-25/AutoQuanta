@@ -55,6 +55,7 @@ export interface ModelTrainingResult {
   all_actuals: number[];
   best_params?: Record<string, unknown>;
   all_probabilities?: number[];
+  comprehensive_metrics?: Record<string, number>;
 }
 
 export interface ModelPerformance {
@@ -65,6 +66,7 @@ export interface ModelPerformance {
   training_time: number;
   best_params?: Record<string, unknown>;
   feature_importance?: Record<string, number>;
+  comprehensive_metrics?: Record<string, number>;
 }
 
 export interface TrainingResults {
