@@ -51,30 +51,37 @@ export default function ModelsPage() {
   const loadModels = async () => {
     try {
       setLoading(true);
-      // For now, we'll simulate loading models
-      // In production, this would call a backend API to list saved models
-      const mockModels: SavedModel[] = [
-        {
-          metadata: {
-            model_name: "rf_20250823_111955",
-            export_timestamp: "20250823_111955",
-            best_model_type: "rf",
-            best_score: -46.88,
-            task_type: "regression",
-            target_column: "Score",
-            feature_count: 2,
-            training_data_shape: [10, 5],
-            cv_folds: 5,
-            models_trained: ["rf"]
-          },
-          model_path: "/path/to/model.pkl",
-          metadata_path: "/path/to/metadata.json",
-          size_mb: 0.06,
-          created_date: new Date('2025-08-23T11:19:55')
-        }
-      ];
       
-      setModels(mockModels);
+      // Load models from localStorage (saved by training process)
+      const savedModelsData = localStorage.getItem('trained_models');
+      if (savedModelsData) {
+        const trainedModels = JSON.parse(savedModelsData);
+        
+        // Convert to SavedModel format
+        const formattedModels: SavedModel[] = trainedModels.map((model: any) => ({
+          metadata: {
+            model_name: model.id,
+            export_timestamp: model.createdAt,
+            best_model_type: model.type,
+            best_score: model.accuracy,
+            task_type: model.task_type,
+            target_column: model.target_column,
+            feature_count: Object.keys(model.feature_importance || {}).length || 0,
+            training_data_shape: [100, 5], // Default shape
+            cv_folds: model.cv_scores?.length || 5,
+            models_trained: [model.type]
+          },
+          model_path: `/models/${model.id}.pkl`,
+          metadata_path: `/models/${model.id}_metadata.json`,
+          size_mb: parseFloat(model.size?.replace('MB', '') || '5.0'),
+          created_date: new Date(model.createdAt)
+        }));
+        
+        setModels(formattedModels);
+      } else {
+        // No saved models found
+        setModels([]);
+      }
     } catch (error) {
       console.error('Failed to load models:', error);
     } finally {
@@ -85,9 +92,13 @@ export default function ModelsPage() {
   const formatModelType = (type: string) => {
     const typeMap: { [key: string]: string } = {
       'rf': 'Random Forest',
-      'lgbm': 'LightGBM',
+      'lgbm': 'LightGBM', 
       'xgb': 'XGBoost',
-      'lr': 'Linear Regression'
+      'lr': 'Linear Regression',
+      'logistic_regression': 'Logistic Regression',
+      'linear_regression': 'Linear Regression',
+      'random_forest': 'Random Forest',
+      'gradient_boosting': 'Gradient Boosting'
     };
     return typeMap[type] || type.toUpperCase();
   };
