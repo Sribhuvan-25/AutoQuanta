@@ -78,6 +78,7 @@ class ModelTrainingResult:
     all_actuals: np.ndarray      # All actual values
     best_params: Optional[Dict[str, Any]] = None
     all_probabilities: Optional[np.ndarray] = None  # For classification
+    comprehensive_metrics: Optional[Dict[str, float]] = None  # MSE, R2, F1, Precision, Recall, etc.
 
 
 @dataclass
