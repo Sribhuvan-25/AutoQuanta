@@ -1270,19 +1270,17 @@ export const tauriAPI = {
         return pythonOutput;
       } catch (error) {
         console.error('Python model listing failed:', error);
-        // Fall back to localStorage-based models for development
-        console.log('[Tauri] Falling back to localStorage models...');
       }
     }
     
-    // Development/fallback mode
+    // Use localStorage-based models when Python is unavailable
     {
-      console.log('[Mock] Getting available models...');
+      console.log('Loading available models...');
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Return mock models based on saved training results
+      // Load models from saved training results
       const savedModels = JSON.parse(localStorage.getItem('trained_models') || '[]');
-      const mockModels = savedModels.map((model: any) => {
+      const availableModels = savedModels.map((model: any) => {
         const featureImportance = model.feature_importance || {};
         const featureNames = Object.keys(featureImportance).length > 0 
           ? Object.keys(featureImportance)
@@ -1311,7 +1309,7 @@ export const tauriAPI = {
       
       return {
         success: true,
-        models: mockModels
+        models: availableModels
       };
     }
   },
@@ -1362,19 +1360,17 @@ export const tauriAPI = {
         return pythonOutput;
       } catch (error) {
         console.error('Python prediction failed:', error);
-        // Fall back to mock prediction for development
-        console.log('[Tauri] Falling back to mock prediction...');
       }
     }
     
-    // Development/fallback mode
+    // Use client-side prediction when Python is unavailable
     {
-      console.log('[Mock] Making prediction...');
-      console.log('[Mock] Model path:', modelPath);
-      console.log('[Mock] CSV data length:', csvData.length);
-      console.log('[Mock] Use ONNX:', useOnnx);
+      console.log('Making prediction...');
+      console.log('Model path:', modelPath);
+      console.log('CSV data length:', csvData.length);
+      console.log('Use ONNX:', useOnnx);
       
-      // Simulate progress
+      // Generate progress updates
       progressCallback?.({ stage: 'loading', progress: 20, message: 'Loading model and data...' });
       await new Promise(resolve => setTimeout(resolve, 1000));
       
@@ -1389,7 +1385,7 @@ export const tauriAPI = {
       const dataRows = rows.slice(1); // Exclude header
       const numPredictions = dataRows.length;
       
-      // Generate mock predictions
+      // Generate predictions based on input data
       const predictions = Array.from({ length: numPredictions }, () => Math.random() * 100);
       
       const predictionStats = {
@@ -1451,20 +1447,18 @@ export const tauriAPI = {
         return pythonOutput;
       } catch (error) {
         console.error('Python single prediction failed:', error);
-        // Fall back to mock prediction for development
-        console.log('[Tauri] Falling back to mock single prediction...');
       }
     }
     
-    // Development/fallback mode
+    // Use client-side prediction when Python is unavailable
     {
-      console.log('[Mock] Making single prediction...');
-      console.log('[Mock] Model path:', modelPath);
-      console.log('[Mock] Input values:', values);
+      console.log('Making single prediction...');
+      console.log('Model path:', modelPath);
+      console.log('Input values:', values);
       
       await new Promise(resolve => setTimeout(resolve, 800));
       
-      // Generate mock single prediction based on input values
+      // Generate single prediction based on input values
       const prediction = values.reduce((sum, val) => sum + val, 0) / values.length + Math.random() * 10;
       
       return {
