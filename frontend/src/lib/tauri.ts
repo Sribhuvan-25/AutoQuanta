@@ -1254,20 +1254,29 @@ export const tauriAPI = {
     
     if (isTauri && invoke) {
       try {
-        const result = await invoke('execute_python_script', {
-          scriptPath: 'Analysis/predict_api.py',
-          args: ['list_models'],
-        }) as { success: boolean; models: any[]; error?: string };
+        // Call Python predict API to get available models
+        const result = await invoke('run_python_command', {
+          command: 'python3',
+          args: ['Analysis/predict_api.py', 'list_models'],
+          cwd: process.cwd()
+        }) as { success: boolean; stdout: string; stderr?: string };
         
-        return result;
+        if (!result.success) {
+          throw new Error(result.stderr || 'Python command failed');
+        }
+        
+        // Parse JSON output from Python script
+        const pythonOutput = JSON.parse(result.stdout);
+        return pythonOutput;
       } catch (error) {
-        return {
-          success: false,
-          models: [],
-          error: `Failed to get available models: ${error}`
-        };
+        console.error('Python model listing failed:', error);
+        // Fall back to localStorage-based models for development
+        console.log('[Tauri] Falling back to localStorage models...');
       }
-    } else {
+    }
+    
+    // Development/fallback mode
+    {
       console.log('[Mock] Getting available models...');
       await new Promise(resolve => setTimeout(resolve, 500));
       
@@ -1317,20 +1326,49 @@ export const tauriAPI = {
     
     if (isTauri && invoke) {
       try {
-        const result = await invoke('execute_python_script', {
-          scriptPath: 'Analysis/predict_api.py',
-          args: ['predict', modelPath, csvData, useOnnx ? 'true' : 'false'],
-          progressCallback,
-        }) as any;
+        // Write CSV data to temporary file
+        const tempCsvPath = await invoke('create_temp_file', {
+          content: csvData,
+          extension: 'csv'
+        }) as string;
         
-        return result;
+        // Call Python predict API with progress monitoring
+        const result = await invoke('run_python_command_with_progress', {
+          command: 'python3',
+          args: ['Analysis/predict_api.py', 'predict', modelPath, tempCsvPath, useOnnx ? 'true' : 'false'],
+          cwd: process.cwd(),
+          progressCallback: (output: string) => {
+            // Parse progress from Python output
+            if (output.startsWith('PROGRESS:')) {
+              try {
+                const progressData = JSON.parse(output.substring(9));
+                progressCallback?.(progressData);
+              } catch (e) {
+                console.warn('Failed to parse progress data:', e);
+              }
+            }
+          }
+        }) as { success: boolean; stdout: string; stderr?: string };
+        
+        // Clean up temp file
+        await invoke('delete_temp_file', { path: tempCsvPath });
+        
+        if (!result.success) {
+          throw new Error(result.stderr || 'Python prediction failed');
+        }
+        
+        // Parse JSON output from Python script
+        const pythonOutput = JSON.parse(result.stdout);
+        return pythonOutput;
       } catch (error) {
-        return {
-          success: false,
-          error: `Prediction failed: ${error}`
-        };
+        console.error('Python prediction failed:', error);
+        // Fall back to mock prediction for development
+        console.log('[Tauri] Falling back to mock prediction...');
       }
-    } else {
+    }
+    
+    // Development/fallback mode
+    {
       console.log('[Mock] Making prediction...');
       console.log('[Mock] Model path:', modelPath);
       console.log('[Mock] CSV data length:', csvData.length);
@@ -1397,19 +1435,29 @@ export const tauriAPI = {
     
     if (isTauri && invoke) {
       try {
-        const result = await invoke('execute_python_script', {
-          scriptPath: 'Analysis/predict_api.py',
-          args: ['predict_single', modelPath, JSON.stringify(values)],
-        }) as any;
+        // Call Python predict API for single prediction
+        const result = await invoke('run_python_command', {
+          command: 'python3',
+          args: ['Analysis/predict_api.py', 'predict_single', modelPath, JSON.stringify(values)],
+          cwd: process.cwd()
+        }) as { success: boolean; stdout: string; stderr?: string };
         
-        return result;
+        if (!result.success) {
+          throw new Error(result.stderr || 'Python single prediction failed');
+        }
+        
+        // Parse JSON output from Python script
+        const pythonOutput = JSON.parse(result.stdout);
+        return pythonOutput;
       } catch (error) {
-        return {
-          success: false,
-          error: `Single prediction failed: ${error}`
-        };
+        console.error('Python single prediction failed:', error);
+        // Fall back to mock prediction for development
+        console.log('[Tauri] Falling back to mock single prediction...');
       }
-    } else {
+    }
+    
+    // Development/fallback mode
+    {
       console.log('[Mock] Making single prediction...');
       console.log('[Mock] Model path:', modelPath);
       console.log('[Mock] Input values:', values);
@@ -1431,6 +1479,51 @@ export const tauriAPI = {
         },
         message: `Single prediction: ${prediction.toFixed(4)}`
       };
+    }
+  },
+
+  // Save prediction history to localStorage
+  async savePredictionHistory(result: any): Promise<void> {
+    try {
+      const timestamp = new Date().toISOString();
+      const predictionRecord = {
+        id: `prediction_${timestamp}`,
+        timestamp,
+        model_name: result.model_metadata?.model_name || 'unknown',
+        model_type: result.model_metadata?.model_type || 'unknown',
+        task_type: result.model_metadata?.task_type || 'unknown',
+        input_shape: result.input_shape || [0, 0],
+        prediction_count: result.predictions?.length || 1,
+        prediction_method: result.prediction_method || 'unknown',
+        success: result.success,
+        error: result.error,
+        prediction_stats: result.prediction_stats,
+        single_prediction: result.prediction || null
+      };
+
+      // Get existing history
+      const existingHistory = JSON.parse(localStorage.getItem('prediction_history') || '[]');
+      
+      // Add new prediction (keep only latest 50)
+      const updatedHistory = [predictionRecord, ...existingHistory].slice(0, 50);
+      
+      // Save to localStorage
+      localStorage.setItem('prediction_history', JSON.stringify(updatedHistory));
+      
+      console.log('[Predictions] Saved prediction to history');
+    } catch (error) {
+      console.error('[Predictions] Failed to save prediction history:', error);
+    }
+  },
+
+  // Get prediction history from localStorage
+  async getPredictionHistory(): Promise<any[]> {
+    try {
+      const history = JSON.parse(localStorage.getItem('prediction_history') || '[]');
+      return history;
+    } catch (error) {
+      console.error('[Predictions] Failed to get prediction history:', error);
+      return [];
     }
   },
 

@@ -332,6 +332,11 @@ const predictionSlice = createSlice({
         if (state.predictionHistory.length > 10) {
           state.predictionHistory = state.predictionHistory.slice(0, 10);
         }
+        
+        // Save to persistent storage
+        import('@/lib/tauri').then(({ tauriAPI }) => {
+          tauriAPI.savePredictionHistory(action.payload);
+        });
       })
       .addCase(makePrediction.rejected, (state, action) => {
         state.isPredicting = false;
@@ -350,6 +355,11 @@ const predictionSlice = createSlice({
         state.isPredicting = false;
         state.singlePredictionResult = action.payload;
         state.showResults = true;
+        
+        // Save to persistent storage
+        import('@/lib/tauri').then(({ tauriAPI }) => {
+          tauriAPI.savePredictionHistory(action.payload);
+        });
       })
       .addCase(makeSinglePrediction.rejected, (state, action) => {
         state.isPredicting = false;

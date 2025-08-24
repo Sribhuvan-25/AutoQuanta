@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PredictionResults } from '@/components/prediction/PredictionResults';
 import { PredictionProgress } from '@/components/prediction/PredictionProgress';
+import { CSVValidator, CSVValidationDisplay } from '@/components/prediction/CSVValidator';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import {
   loadAvailableModels,
@@ -52,6 +53,7 @@ export default function PredictPage() {
   const [inputMode, setInputMode] = useState<'csv' | 'manual'>('csv');
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [manualValues, setManualValues] = useState<string[]>([]);
+  const [csvValidation, setCsvValidation] = useState<any>(null);
   
   // Load models on component mount
   useEffect(() => {
@@ -138,7 +140,7 @@ export default function PredictPage() {
   };
   
   const canPredict = selectedModel && (
-    (inputMode === 'csv' && inputData.csvData) ||
+    (inputMode === 'csv' && inputData.csvData && (!csvValidation || csvValidation.isValid)) ||
     (inputMode === 'manual' && inputData.manualValues?.every(v => !isNaN(v)))
   );
   
@@ -343,12 +345,29 @@ export default function PredictPage() {
                 </div>
                 
                 {csvFile && (
-                  <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-5 w-5 text-green-600" />
-                      <span className="font-medium text-green-800">{csvFile.name}</span>
-                      <span className="text-green-600">({(csvFile.size / 1024).toFixed(1)} KB)</span>
+                  <div className="mt-4 space-y-4">
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-green-600" />
+                        <span className="font-medium text-green-800">{csvFile.name}</span>
+                        <span className="text-green-600">({(csvFile.size / 1024).toFixed(1)} KB)</span>
+                      </div>
                     </div>
+                    
+                    {/* CSV Validation */}
+                    {selectedModel && inputData.csvData && (
+                      <>
+                        <CSVValidator
+                          csvData={inputData.csvData}
+                          expectedFeatures={getFeatureNames()}
+                          onValidation={setCsvValidation}
+                        />
+                        <CSVValidationDisplay
+                          validation={csvValidation}
+                          onDismiss={() => setCsvValidation(null)}
+                        />
+                      </>
+                    )}
                   </div>
                 )}
               </div>

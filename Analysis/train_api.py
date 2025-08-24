@@ -192,6 +192,24 @@ def export_trained_model(results, df, target_column: str) -> Dict[str, Any]:
         with open(pickle_path, 'wb') as f:
             pickle.dump(results.best_model.model_object, f)
         
+        # Get feature names from preprocessor
+        feature_names = []
+        try:
+            if hasattr(preprocessor, 'get_feature_names_out'):
+                feature_names = preprocessor.get_feature_names_out().tolist()
+            elif hasattr(preprocessor, 'feature_names_'):
+                feature_names = preprocessor.feature_names_.tolist()
+            else:
+                # Fallback: get numeric column names from original data
+                numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+                if target_column in numeric_cols:
+                    numeric_cols.remove(target_column)
+                feature_names = numeric_cols[:X_sample.shape[1]]
+        except Exception as e:
+            logger.warning(f"Could not extract feature names: {e}")
+            # Generate generic feature names
+            feature_names = [f"feature_{i}" for i in range(X_sample.shape[1])]
+        
         # Create model metadata
         metadata = {
             'model_name': model_name,
@@ -201,9 +219,16 @@ def export_trained_model(results, df, target_column: str) -> Dict[str, Any]:
             'task_type': results.training_config.task_type,
             'target_column': target_column,
             'feature_count': X_sample.shape[1],
+            'feature_names': feature_names,
             'training_data_shape': df.shape,
             'cv_folds': results.training_config.cv_folds,
-            'models_trained': [model.model_name for model in results.all_models]
+            'models_trained': [model.model_name for model in results.all_models],
+            'preprocessing_info': {
+                'numeric_columns': df.select_dtypes(include=[np.number]).columns.tolist(),
+                'categorical_columns': df.select_dtypes(include=['object']).columns.tolist(),
+                'total_columns': len(df.columns),
+                'missing_value_strategy': 'zero_fill'  # Document our strategy
+            }
         }
         
         # Save metadata

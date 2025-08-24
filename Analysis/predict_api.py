@@ -71,6 +71,25 @@ def get_available_models() -> Dict[str, Any]:
                         onnx_path = model_dir / "best_model.onnx"
                         pickle_path = model_dir / "best_model.pkl"
                         
+                        # Get feature names from feature importance or metadata
+                        feature_names = []
+                        feature_importance = {}
+                        
+                        # Try to load feature importance from training results
+                        importance_path = model_dir / "feature_importance.csv"
+                        if importance_path.exists():
+                            try:
+                                import pandas as pd
+                                importance_df = pd.read_csv(importance_path)
+                                feature_names = importance_df['feature'].tolist()
+                                feature_importance = dict(zip(importance_df['feature'], importance_df['importance']))
+                            except Exception as e:
+                                logger.warning(f"Failed to read feature importance for {model_dir.name}: {e}")
+                        
+                        # Fallback to metadata
+                        if not feature_names and 'feature_names' in metadata:
+                            feature_names = metadata['feature_names']
+                        
                         model_info = {
                             'model_name': metadata.get('model_name', model_dir.name),
                             'model_type': metadata.get('best_model_type', 'unknown'),
@@ -78,7 +97,9 @@ def get_available_models() -> Dict[str, Any]:
                             'target_column': metadata.get('target_column', 'unknown'),
                             'best_score': metadata.get('best_score', 0.0),
                             'export_timestamp': metadata.get('export_timestamp', 'unknown'),
-                            'feature_count': metadata.get('feature_count', 0),
+                            'feature_count': metadata.get('feature_count', len(feature_names) or 0),
+                            'feature_names': feature_names,
+                            'feature_importance': feature_importance,
                             'training_data_shape': metadata.get('training_data_shape', [0, 0]),
                             'has_onnx': onnx_path.exists(),
                             'has_pickle': pickle_path.exists(),
@@ -146,19 +167,90 @@ def predict_with_model(model_path: str, csv_data: str, use_onnx: bool = True) ->
         # Stage 3: Preprocess data
         emit_progress("preprocessing", 30, "Preprocessing data...")
         
-        # For prediction, we need to apply the same preprocessing that was used during training
-        # In a production system, you'd save the preprocessor along with the model
-        # For now, we'll use a basic preprocessing approach
+        # Load preprocessing info from metadata
+        expected_features = metadata.get('feature_count', 0)
+        expected_feature_names = metadata.get('feature_names', [])
+        task_type = metadata.get('task_type', 'classification')
+        target_column = metadata.get('target_column', 'target')
         
-        # Get numeric columns only (simple preprocessing)
-        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        if len(numeric_cols) == 0:
-            raise ValueError("No numeric columns found in input data")
+        logger.info(f"Expected features: {expected_features}")
+        logger.info(f"Expected feature names: {expected_feature_names}")
+        logger.info(f"Input columns: {list(df.columns)}")
         
-        X = df[numeric_cols].fillna(0).values.astype(np.float32)
+        # Validate and prepare features
+        try:
+            # If we have expected feature names, try to match them
+            if expected_feature_names and len(expected_feature_names) > 0:
+                # Check if input has the expected columns
+                missing_features = [f for f in expected_feature_names if f not in df.columns]
+                if missing_features:
+                    logger.warning(f"Missing expected features: {missing_features}")
+                    # Try to use available numeric columns
+                    available_features = [f for f in expected_feature_names if f in df.columns]
+                    if len(available_features) == 0:
+                        # Fall back to using all numeric columns
+                        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+                        # Remove target column if present
+                        if target_column in numeric_cols:
+                            numeric_cols.remove(target_column)
+                        X = df[numeric_cols].fillna(0).values.astype(np.float32)
+                        logger.warning(f"Using all numeric columns: {numeric_cols}")
+                    else:
+                        # Use available expected features and pad missing ones with zeros
+                        X_partial = df[available_features].fillna(0).values.astype(np.float32)
+                        # Pad with zeros for missing features
+                        missing_count = len(missing_features)
+                        if missing_count > 0:
+                            padding = np.zeros((X_partial.shape[0], missing_count), dtype=np.float32)
+                            X = np.hstack([X_partial, padding])
+                            logger.warning(f"Padded {missing_count} missing features with zeros")
+                        else:
+                            X = X_partial
+                else:
+                    # Perfect match - use expected features in order
+                    X = df[expected_feature_names].fillna(0).values.astype(np.float32)
+                    logger.info("Using expected features in correct order")
+            else:
+                # No expected feature names - use all numeric columns
+                numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+                # Remove target column if present
+                if target_column in numeric_cols:
+                    numeric_cols.remove(target_column)
+                
+                if len(numeric_cols) == 0:
+                    raise ValueError("No numeric columns found in input data")
+                
+                X = df[numeric_cols].fillna(0).values.astype(np.float32)
+                logger.info(f"Using all numeric columns: {numeric_cols}")
+            
+            # Validate feature count
+            if expected_features > 0 and X.shape[1] != expected_features:
+                logger.warning(f"Feature count mismatch: expected {expected_features}, got {X.shape[1]}")
+                # Try to adjust by truncating or padding
+                if X.shape[1] > expected_features:
+                    X = X[:, :expected_features]
+                    logger.warning(f"Truncated features to {expected_features}")
+                elif X.shape[1] < expected_features:
+                    padding = np.zeros((X.shape[0], expected_features - X.shape[1]), dtype=np.float32)
+                    X = np.hstack([X, padding])
+                    logger.warning(f"Padded features to {expected_features}")
+            
+        except Exception as preprocessing_error:
+            logger.error(f"Preprocessing failed: {preprocessing_error}")
+            # Last resort: use any numeric columns available
+            try:
+                numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+                if target_column in numeric_cols:
+                    numeric_cols.remove(target_column)
+                if len(numeric_cols) == 0:
+                    raise ValueError("No numeric columns available for prediction")
+                X = df[numeric_cols].fillna(0).values.astype(np.float32)
+                logger.warning(f"Fallback preprocessing using: {numeric_cols}")
+            except Exception as fallback_error:
+                raise ValueError(f"Unable to preprocess data: {preprocessing_error}. Fallback also failed: {fallback_error}")
         
-        logger.info(f"Preprocessed data shape: {X.shape}")
-        logger.info(f"Expected feature count: {metadata.get('feature_count', 'unknown')}")
+        logger.info(f"Final preprocessed data shape: {X.shape}")
+        logger.info(f"Expected vs actual features: {expected_features} vs {X.shape[1]}")
         
         # Stage 4: Load model and make predictions
         emit_progress("predicting", 50, "Loading model and making predictions...")
