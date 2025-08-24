@@ -19,6 +19,7 @@ import storage from 'redux-persist/lib/storage';
 import projectSlice from './slices/projectSlice';
 import dataSlice from './slices/dataSlice';
 import trainingSlice from './slices/trainingSlice';
+import predictionSlice from './slices/predictionSlice';
 import uiSlice from './slices/uiSlice';
 import settingsSlice from './slices/settingsSlice';
 
@@ -26,6 +27,7 @@ const rootReducer = combineReducers({
   project: projectSlice,
   data: dataSlice,
   training: trainingSlice,
+  prediction: predictionSlice,
   ui: uiSlice,
   settings: settingsSlice,
 });
@@ -35,7 +37,7 @@ const persistConfig = {
   version: 1,
   storage,
   whitelist: ['project', 'settings'],
-  blacklist: ['ui', 'training', 'data'],
+  blacklist: ['ui', 'training', 'prediction', 'data'],
 };
 
 
