@@ -5,6 +5,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { TrainingConfig } from '@/components/training/TrainingConfig';
 import { TrainingProgress } from '@/components/training/TrainingProgress';
 import { TrainingResults } from '@/components/training/TrainingResults';
+import { ModelDetailsModal } from '@/components/training/ModelDetailsModal';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { 
   startTraining, 
@@ -37,6 +38,8 @@ export default function TrainPage() {
   const currentDataset = useAppSelector(selectCurrentDataset);
   
   const [showResults, setShowResults] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<any>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleStartTraining = async (config: TrainingConfigType) => {
     try {
@@ -140,11 +143,22 @@ export default function TrainPage() {
             bestModel={bestModel}
             onExportResults={handleExportResults}
             onViewDetails={(modelName) => {
-              console.log('View details for model:', modelName);
-              // In a real app, this would open a detailed model view
+              const model = modelComparison.find(m => m.model_name === modelName);
+              if (model) {
+                setSelectedModel(model);
+                setIsModalOpen(true);
+              }
             }}
           />
         )}
+
+        {/* Model Details Modal */}
+        <ModelDetailsModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          model={selectedModel}
+          trainingResults={currentResults}
+        />
       </div>
     </AppLayout>
   );
