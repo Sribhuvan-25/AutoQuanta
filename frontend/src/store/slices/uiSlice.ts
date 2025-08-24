@@ -305,14 +305,14 @@ export const {
 export default uiSlice.reducer;
 
 // Selectors
-export const selectIsLoading = (state: { ui: UIState }) => state.ui.isLoading;
-export const selectLoadingMessage = (state: { ui: UIState }) => state.ui.loadingMessage;
-export const selectActiveTab = (state: { ui: UIState }) => state.ui.activeTab;
-export const selectBreadcrumbs = (state: { ui: UIState }) => state.ui.breadcrumbs;
-export const selectSidebar = (state: { ui: UIState }) => state.ui.sidebar;
-export const selectModal = (state: { ui: UIState }) => state.ui.modal;
-export const selectNotifications = (state: { ui: UIState }) => state.ui.notifications;
-export const selectTableView = (state: { ui: UIState }) => state.ui.tableView;
-export const selectVisualizationSettings = (state: { ui: UIState }) => state.ui.visualizationSettings;
-export const selectPanels = (state: { ui: UIState }) => state.ui.panels;
-export const selectLayout = (state: { ui: UIState }) => state.ui.layout;
+export const selectIsLoading = (state: any) => state.ui.isLoading;
+export const selectLoadingMessage = (state: any) => state.ui.loadingMessage;
+export const selectActiveTab = (state: any) => state.ui.activeTab;
+export const selectBreadcrumbs = (state: any) => state.ui.breadcrumbs;
+export const selectSidebar = (state: any) => state.ui.sidebar;
+export const selectModal = (state: any) => state.ui.modal;
+export const selectNotifications = (state: any) => state.ui.notifications;
+export const selectTableView = (state: any) => state.ui.tableView;
+export const selectVisualizationSettings = (state: any) => state.ui.visualizationSettings;
+export const selectPanels = (state: any) => state.ui.panels;
+export const selectLayout = (state: any) => state.ui.layout;

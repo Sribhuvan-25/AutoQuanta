@@ -191,7 +191,7 @@ export function TrainingResults({
         {/* Models Tab */}
         {selectedTab === 'models' && (
           <div className="space-y-4">
-            {modelComparison
+            {[...modelComparison]
               .sort((a, b) => b.mean_score - a.mean_score)
               .map((model, index) => (
                 <div
