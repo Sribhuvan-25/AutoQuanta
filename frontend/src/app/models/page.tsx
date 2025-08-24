@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -136,13 +137,14 @@ export default function ModelsPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-6xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Model Management</h1>
-        <p className="text-gray-600">
-          Manage your trained models, view performance metrics, and prepare for inference.
-        </p>
-      </div>
+    <AppLayout>
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Model Management</h1>
+          <p className="text-gray-600 mt-1">
+            Manage your trained models, view performance metrics, and prepare for inference.
+          </p>
+        </div>
 
       {models.length === 0 ? (
         <Card>
@@ -367,6 +369,7 @@ export default function ModelsPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </AppLayout>
   );
 }
