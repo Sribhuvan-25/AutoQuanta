@@ -1248,6 +1248,182 @@ export const tauriAPI = {
     return params[modelName] || {};
   },
 
+  // Prediction methods
+  async getAvailableModels(): Promise<{ success: boolean; models: any[]; error?: string }> {
+    await loadTauriAPI();
+    
+    if (isTauri && invoke) {
+      try {
+        const result = await invoke('execute_python_script', {
+          scriptPath: 'Analysis/predict_api.py',
+          args: ['list_models'],
+        }) as { success: boolean; models: any[]; error?: string };
+        
+        return result;
+      } catch (error) {
+        return {
+          success: false,
+          models: [],
+          error: `Failed to get available models: ${error}`
+        };
+      }
+    } else {
+      console.log('[Mock] Getting available models...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Return mock models based on saved training results
+      const savedModels = JSON.parse(localStorage.getItem('trained_models') || '[]');
+      const mockModels = savedModels.map((model: any) => ({
+        model_name: model.name || model.id,
+        model_type: model.type || 'rf',
+        task_type: model.task_type || 'classification',
+        target_column: model.target_column || 'target',
+        best_score: model.accuracy || 0.85,
+        export_timestamp: model.createdAt || new Date().toISOString(),
+        feature_count: Object.keys(model.feature_importance || {}).length || 5,
+        training_data_shape: [1000, 10],
+        has_onnx: true,
+        has_pickle: true,
+        model_path: `/models/${model.id}`,
+        onnx_path: `/models/${model.id}/best_model.onnx`,
+        pickle_path: `/models/${model.id}/best_model.pkl`,
+      }));
+      
+      return {
+        success: true,
+        models: mockModels,
+        message: `Found ${mockModels.length} trained models`
+      };
+    }
+  },
+
+  async makePrediction(
+    modelPath: string,
+    csvData: string,
+    useOnnx: boolean = true,
+    progressCallback?: (progress: any) => void
+  ): Promise<{ success: boolean; predictions?: number[]; error?: string; [key: string]: any }> {
+    await loadTauriAPI();
+    
+    if (isTauri && invoke) {
+      try {
+        const result = await invoke('execute_python_script', {
+          scriptPath: 'Analysis/predict_api.py',
+          args: ['predict', modelPath, csvData, useOnnx ? 'true' : 'false'],
+          progressCallback,
+        }) as any;
+        
+        return result;
+      } catch (error) {
+        return {
+          success: false,
+          error: `Prediction failed: ${error}`
+        };
+      }
+    } else {
+      console.log('[Mock] Making prediction...');
+      console.log('[Mock] Model path:', modelPath);
+      console.log('[Mock] CSV data length:', csvData.length);
+      console.log('[Mock] Use ONNX:', useOnnx);
+      
+      // Simulate progress
+      progressCallback?.({ stage: 'loading', progress: 20, message: 'Loading model and data...' });
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      progressCallback?.({ stage: 'predicting', progress: 60, message: 'Making predictions...' });
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      progressCallback?.({ stage: 'processing', progress: 90, message: 'Processing results...' });
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Parse CSV to get row count
+      const rows = csvData.split('\n').filter(row => row.trim());
+      const dataRows = rows.slice(1); // Exclude header
+      const numPredictions = dataRows.length;
+      
+      // Generate mock predictions
+      const predictions = Array.from({ length: numPredictions }, () => Math.random() * 100);
+      
+      const predictionStats = {
+        count: numPredictions,
+        mean: predictions.reduce((a, b) => a + b) / predictions.length,
+        std: Math.sqrt(predictions.reduce((sum, val) => sum + Math.pow(val - predictions.reduce((a, b) => a + b) / predictions.length, 2), 0) / predictions.length),
+        min: Math.min(...predictions),
+        max: Math.max(...predictions),
+      };
+      
+      // Add predictions column to CSV
+      const outputRows = [
+        rows[0] + ',prediction',
+        ...dataRows.map((row, idx) => `${row},${predictions[idx].toFixed(4)}`)
+      ];
+      
+      progressCallback?.({ stage: 'completed', progress: 100, message: 'Prediction completed!' });
+      
+      return {
+        success: true,
+        predictions,
+        prediction_stats: predictionStats,
+        output_csv: outputRows.join('\n'),
+        input_shape: [numPredictions, rows[0].split(',').length],
+        prediction_method: useOnnx ? 'onnx' : 'pickle',
+        model_metadata: {
+          model_name: modelPath.split('/').pop() || 'unknown',
+          model_type: 'random_forest',
+          task_type: 'regression',
+          target_column: 'target',
+          training_score: 0.85 + Math.random() * 0.1,
+        },
+        message: `Successfully made ${numPredictions} predictions using ${useOnnx ? 'ONNX' : 'pickle'} model`
+      };
+    }
+  },
+
+  async makeSinglePrediction(
+    modelPath: string,
+    values: number[]
+  ): Promise<{ success: boolean; prediction?: number; error?: string; [key: string]: any }> {
+    await loadTauriAPI();
+    
+    if (isTauri && invoke) {
+      try {
+        const result = await invoke('execute_python_script', {
+          scriptPath: 'Analysis/predict_api.py',
+          args: ['predict_single', modelPath, JSON.stringify(values)],
+        }) as any;
+        
+        return result;
+      } catch (error) {
+        return {
+          success: false,
+          error: `Single prediction failed: ${error}`
+        };
+      }
+    } else {
+      console.log('[Mock] Making single prediction...');
+      console.log('[Mock] Model path:', modelPath);
+      console.log('[Mock] Input values:', values);
+      
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Generate mock single prediction based on input values
+      const prediction = values.reduce((sum, val) => sum + val, 0) / values.length + Math.random() * 10;
+      
+      return {
+        success: true,
+        prediction,
+        prediction_method: 'onnx',
+        model_metadata: {
+          model_name: modelPath.split('/').pop() || 'unknown',
+          model_type: 'random_forest',
+          task_type: 'regression',
+          training_score: 0.85 + Math.random() * 0.1,
+        },
+        message: `Single prediction: ${prediction.toFixed(4)}`
+      };
+    }
+  },
+
   // Save trained models to localStorage for Models page
   async saveTrainedModels(results: any): Promise<void> {
     try {
