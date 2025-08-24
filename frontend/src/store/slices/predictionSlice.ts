@@ -14,6 +14,8 @@ export interface TrainedModel {
   best_score: number;
   export_timestamp: string;
   feature_count: number;
+  feature_names?: string[];
+  feature_importance?: Record<string, number>;
   training_data_shape: [number, number];
   has_onnx: boolean;
   has_pickle: boolean;

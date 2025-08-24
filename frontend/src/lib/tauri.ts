@@ -1273,26 +1273,36 @@ export const tauriAPI = {
       
       // Return mock models based on saved training results
       const savedModels = JSON.parse(localStorage.getItem('trained_models') || '[]');
-      const mockModels = savedModels.map((model: any) => ({
-        model_name: model.name || model.id,
-        model_type: model.type || 'rf',
-        task_type: model.task_type || 'classification',
-        target_column: model.target_column || 'target',
-        best_score: model.accuracy || 0.85,
-        export_timestamp: model.createdAt || new Date().toISOString(),
-        feature_count: Object.keys(model.feature_importance || {}).length || 5,
-        training_data_shape: [1000, 10],
-        has_onnx: true,
-        has_pickle: true,
-        model_path: `/models/${model.id}`,
-        onnx_path: `/models/${model.id}/best_model.onnx`,
-        pickle_path: `/models/${model.id}/best_model.pkl`,
-      }));
+      const mockModels = savedModels.map((model: any) => {
+        const featureImportance = model.feature_importance || {};
+        const featureNames = Object.keys(featureImportance).length > 0 
+          ? Object.keys(featureImportance)
+          : ['feature_1', 'feature_2', 'feature_3', 'feature_4', 'feature_5'];
+        
+        const modelId = model.id || `${model.name || 'model'}_${Date.now()}`;
+        
+        return {
+          model_name: model.name || model.id,
+          model_type: model.type || 'rf',
+          task_type: model.task_type || 'classification',
+          target_column: model.target_column || 'target',
+          best_score: model.accuracy || 0.85,
+          export_timestamp: model.createdAt || new Date().toISOString(),
+          feature_count: featureNames.length,
+          feature_names: featureNames,
+          feature_importance: featureImportance,
+          training_data_shape: [1000, 10],
+          has_onnx: true,
+          has_pickle: true,
+          model_path: `/models/${modelId}`,
+          onnx_path: `/models/${modelId}/best_model.onnx`,
+          pickle_path: `/models/${modelId}/best_model.pkl`,
+        };
+      });
       
       return {
         success: true,
-        models: mockModels,
-        message: `Found ${mockModels.length} trained models`
+        models: mockModels
       };
     }
   },

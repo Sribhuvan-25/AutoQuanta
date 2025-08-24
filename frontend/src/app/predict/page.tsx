@@ -66,6 +66,16 @@ export default function PredictPage() {
     }
   }, [selectedModel, inputMode]);
   
+  // Get feature names from selected model
+  const getFeatureNames = () => {
+    if (selectedModel?.feature_names && selectedModel.feature_names.length > 0) {
+      return selectedModel.feature_names;
+    }
+    // Fallback to generic names
+    const count = selectedModel?.feature_count || 5;
+    return Array.from({ length: count }, (_, i) => `Feature ${i + 1}`);
+  };
+  
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && file.type === 'text/csv') {
@@ -223,11 +233,11 @@ export default function PredictPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {availableModels.map((model) => (
+              {availableModels.map((model, index) => (
                 <div
-                  key={model.model_name}
+                  key={`${model.model_name}-${model.export_timestamp}-${index}`}
                   className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                    selectedModel?.model_name === model.model_name
+                    selectedModel?.model_path === model.model_path
                       ? 'border-blue-500 bg-blue-50'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
@@ -235,12 +245,25 @@ export default function PredictPage() {
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="font-medium text-gray-900">{model.model_name}</h3>
-                      <div className="flex gap-4 text-sm text-gray-600 mt-1">
-                        <span>Type: {model.model_type.toUpperCase()}</span>
-                        <span>Task: {model.task_type}</span>
-                        <span>Score: {model.best_score.toFixed(4)}</span>
-                        <span>Features: {model.feature_count}</span>
+                      <h3 className="font-medium text-gray-900">
+                        {model.model_name.toUpperCase()} 
+                        <span className="text-sm text-gray-500 ml-2">
+                          ({new Date(model.export_timestamp).toLocaleString()})
+                        </span>
+                      </h3>
+                      <div className="space-y-1 text-sm text-gray-600 mt-1">
+                        <div className="flex gap-4">
+                          <span>Type: {model.model_type.toUpperCase()}</span>
+                          <span>Task: {model.task_type}</span>
+                          <span>Score: {model.best_score.toFixed(4)}</span>
+                          <span>Features: {model.feature_count}</span>
+                        </div>
+                        {model.feature_names && model.feature_names.length > 0 && (
+                          <div className="text-xs text-gray-500">
+                            Features: {model.feature_names.slice(0, 3).join(', ')}
+                            {model.feature_names.length > 3 && ` ... and ${model.feature_names.length - 3} more`}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex gap-2">
@@ -308,6 +331,12 @@ export default function PredictPage() {
                     <h3 className="text-lg font-medium text-gray-900 mb-2">Upload CSV File</h3>
                     <p className="text-gray-600 mb-4">
                       Choose a CSV file with {selectedModel.feature_count} numeric columns
+                      {selectedModel.feature_names && selectedModel.feature_names.length > 0 && (
+                        <>
+                          <br />
+                          <span className="text-sm">Expected columns: {getFeatureNames().join(', ')}</span>
+                        </>
+                      )}
                     </p>
                     <Button>Choose File</Button>
                   </label>
@@ -332,21 +361,26 @@ export default function PredictPage() {
                   Enter values for {selectedModel.feature_count} features:
                 </p>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {manualValues.map((value, index) => (
-                    <div key={index}>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Feature {index + 1}
-                      </label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={value}
-                        onChange={(e) => handleManualValueChange(index, e.target.value)}
-                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="0.0"
-                      />
-                    </div>
-                  ))}
+                  {manualValues.map((value, index) => {
+                    const featureNames = getFeatureNames();
+                    const featureName = featureNames[index] || `Feature ${index + 1}`;
+                    
+                    return (
+                      <div key={index}>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          {featureName}
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={value}
+                          onChange={(e) => handleManualValueChange(index, e.target.value)}
+                          className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="0.0"
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
