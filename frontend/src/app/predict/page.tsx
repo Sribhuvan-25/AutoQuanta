@@ -5,6 +5,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PredictionResults } from '@/components/prediction/PredictionResults';
 import { PredictionProgress } from '@/components/prediction/PredictionProgress';
 import { CSVValidator, CSVValidationDisplay } from '@/components/prediction/CSVValidator';
+import { ModelSelectionModal } from '@/components/prediction/ModelSelectionModal';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import {
   loadAvailableModels,
@@ -30,7 +31,7 @@ import {
   selectShowResults,
 } from '@/store/slices/predictionSlice';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, RefreshCw, Upload, FileText, Calculator, Database, Zap, Download, Play } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Upload, FileText, Calculator, Database, Zap, Download, Play, ChevronDown, Check } from 'lucide-react';
 
 export default function PredictPage() {
   const dispatch = useAppDispatch();
@@ -54,11 +55,21 @@ export default function PredictPage() {
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [manualValues, setManualValues] = useState<string[]>([]);
   const [csvValidation, setCsvValidation] = useState<any>(null);
+  const [isModelModalOpen, setIsModelModalOpen] = useState(false);
   
   // Load models on component mount
   useEffect(() => {
     dispatch(loadAvailableModels());
   }, [dispatch]);
+
+  // Auto-select best model when models are loaded
+  useEffect(() => {
+    if (availableModels.length > 0 && !selectedModel) {
+      // Sort models by score and select the best one
+      const bestModel = [...availableModels].sort((a, b) => b.best_score - a.best_score)[0];
+      dispatch(selectModel(bestModel));
+    }
+  }, [availableModels, selectedModel, dispatch]);
   
   // Initialize manual values when model is selected
   useEffect(() => {
@@ -214,11 +225,11 @@ export default function PredictPage() {
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="flex items-center gap-2 mb-4">
             <Database className="h-5 w-5 text-gray-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Select Model</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Selected Model</h2>
           </div>
           
           {isLoadingModels ? (
-            <div className="flex items-center justify-center py-8">
+            <div className="flex items-center justify-center py-4">
               <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
               <span className="text-gray-600">Loading available models...</span>
             </div>
@@ -234,52 +245,57 @@ export default function PredictPage() {
               </Button>
             </div>
           ) : (
-            <div className="space-y-3">
-              {availableModels.map((model, index) => (
-                <div
-                  key={`${model.model_name}-${model.export_timestamp}-${index}`}
-                  className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                    selectedModel?.model_path === model.model_path
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                  onClick={() => dispatch(selectModel(model))}
-                >
+            <>
+              {/* Current Selected Model Display */}
+              {selectedModel ? (
+                <div className="p-4 rounded-lg border border-green-200 bg-green-50 mb-4">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-medium text-gray-900">
-                        {model.model_name.toUpperCase()} 
-                        <span className="text-sm text-gray-500 ml-2">
-                          ({new Date(model.export_timestamp).toLocaleString()})
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Check className="h-5 w-5 text-green-600" />
+                        <h3 className="font-medium text-gray-900">
+                          {selectedModel.model_name.toUpperCase()}
+                        </h3>
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
+                          <Zap className="h-3 w-3" />
+                          Best Model
                         </span>
-                      </h3>
-                      <div className="space-y-1 text-sm text-gray-600 mt-1">
-                        <div className="flex gap-4">
-                          <span>Type: {model.model_type.toUpperCase()}</span>
-                          <span>Task: {model.task_type}</span>
-                          <span>Score: {model.best_score.toFixed(4)}</span>
-                          <span>Features: {model.feature_count}</span>
-                        </div>
-                        {model.feature_names && model.feature_names.length > 0 && (
-                          <div className="text-xs text-gray-500">
-                            Features: {model.feature_names.slice(0, 3).join(', ')}
-                            {model.feature_names.length > 3 && ` ... and ${model.feature_names.length - 3} more`}
-                          </div>
-                        )}
+                      </div>
+                      <div className="flex gap-4 text-sm text-gray-600">
+                        <span>Type: <span className="font-medium">{selectedModel.model_type.toUpperCase()}</span></span>
+                        <span>Task: <span className="font-medium">{selectedModel.task_type}</span></span>
+                        <span>Score: <span className="font-medium text-green-600">{selectedModel.best_score.toFixed(4)}</span></span>
+                        <span>Features: <span className="font-medium">{selectedModel.feature_count}</span></span>
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      {model.has_onnx && (
+                      {selectedModel.has_onnx && (
                         <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">ONNX</span>
                       )}
-                      {model.has_pickle && (
+                      {selectedModel.has_pickle && (
                         <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">PKL</span>
                       )}
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
+              ) : null}
+              
+              {/* Model Selection Button */}
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-gray-600">
+                  {availableModels.length} model{availableModels.length !== 1 ? 's' : ''} available
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsModelModalOpen(true)}
+                  className="flex items-center gap-2"
+                >
+                  <Database className="h-4 w-4" />
+                  Choose Different Model
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </div>
+            </>
           )}
         </div>
 
@@ -426,6 +442,15 @@ export default function PredictPage() {
             </div>
           </div>
         )}
+
+        {/* Model Selection Modal */}
+        <ModelSelectionModal
+          isOpen={isModelModalOpen}
+          onClose={() => setIsModelModalOpen(false)}
+          availableModels={availableModels}
+          selectedModel={selectedModel}
+          onSelectModel={(model) => dispatch(selectModel(model))}
+        />
       </div>
     </AppLayout>
   );

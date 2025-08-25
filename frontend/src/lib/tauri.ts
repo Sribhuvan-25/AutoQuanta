@@ -16,55 +16,7 @@ async function loadTauriAPI() {
   }
 }
 
-const mockDataProfile: DataProfile = {
-  file_path: '/path/to/sample.csv',
-  shape: [1000, 6],
-  columns: [
-    {
-      name: 'ID',
-      dtype: 'int64',
-      missing_count: 0,
-      missing_percentage: 0,
-      unique_count: 1000,
-      unique_percentage: 100,
-      memory_usage: 8000,
-      stats: { min: 1, max: 1000, mean: 500.5, std: 288.67 },
-      warnings: ['All values are unique - consider if this is an ID column']
-    },
-    {
-      name: 'Feature1',
-      dtype: 'float64',
-      missing_count: 0,
-      missing_percentage: 0,
-      unique_count: 1000,
-      unique_percentage: 100,
-      memory_usage: 8000,
-      stats: { min: 0.1, max: 99.9, mean: 50.0, std: 28.87 },
-      warnings: []
-    },
-    {
-      name: 'Feature2',
-      dtype: 'object',
-      missing_count: 0,
-      missing_percentage: 0,
-      unique_count: 5,
-      unique_percentage: 0.5,
-      memory_usage: 8000,
-      stats: { 
-        top_categories: [
-          { value: 'A', count: 200 },
-          { value: 'B', count: 180 },
-          { value: 'C', count: 150 }
-        ]
-      },
-      warnings: []
-    }
-  ],
-  missing_summary: { total_missing: 0, columns_with_missing: 0 },
-  warnings: ['ID column detected'],
-  memory_usage_mb: 0.048,
-  dtypes_summary: { 'int64': 1, 'float64': 1, 'object': 1 }
-};
+// Mock data removed - app now requires real Python integration
 
 export const tauriAPI = {
   async openProject(): Promise<string | null> {
@@ -173,9 +125,8 @@ export const tauriAPI = {
         throw new Error(`Failed to profile CSV: ${error}`);
       }
     } else {
-      console.log(`[Mock] Profiling CSV: ${filePath}`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      return mockDataProfile;
+      console.log(`[Mock] CSV profiling requires Python integration`);
+      return null;
     }
   },
 
@@ -226,14 +177,8 @@ export const tauriAPI = {
       (globalThis as { lastTrainingConfig?: TrainingConfig }).lastTrainingConfig = config;
       (globalThis as { currentDataset?: { data: string[][]; filePath: string } }).currentDataset = datasetData;
       
-      // Call real Python training
-      try {
-        const result = await this.callPythonTraining(config, datasetData);
-        return result;
-      } catch (error) {
-        console.error('Python training failed:', error);
-        throw error;
-      }
+      // Python training is not available in browser mode
+      throw new Error('Training requires Python integration. Please use the desktop app version or set up Python API.');
     }
   },
 
@@ -707,177 +652,8 @@ export const tauriAPI = {
         return pythonResults;
       }
       
-      console.log('[Results] No Python results found, generating fallback...');
-      
-      // Get actual dataset and config for fallback
-      const config = (globalThis as { lastTrainingConfig?: TrainingConfig }).lastTrainingConfig || {
-        target_column: 'target',
-        task_type: 'classification' as const,
-        test_size: 0.2,
-        cv_folds: 5,
-        random_seed: 42,
-        models_to_try: ['random_forest', 'gradient_boosting']
-      };
-      
-      const actualDataset = (globalThis as { currentDataset?: { data: string[][]; filePath: string } }).currentDataset;
-      
-      // Use actual column names if dataset is available
-      const actualColumns = actualDataset?.data?.[0] || [];
-      const actualFeatures = actualColumns.filter(col => col !== config.target_column);
-      
-      console.log('[Results] Using actual dataset columns:', actualColumns.length, 'columns');
-      console.log('[Results] Target column:', config.target_column);
-      console.log('[Results] Feature columns:', actualFeatures.length, 'features');
-      
-      const mockModels = [
-        {
-          model_name: 'Random Forest',
-          cv_scores: [0.892, 0.885, 0.898, 0.901, 0.888],
-          mean_score: 0.8928,
-          std_score: 0.0064,
-          training_time: 3.2,
-          best_params: { 
-            n_estimators: 100, 
-            max_depth: 10, 
-            min_samples_split: 2 
-          },
-          feature_importance: actualFeatures.length > 0 ? 
-            actualFeatures.slice(0, 6).reduce((acc, feature, idx) => {
-              acc[feature] = [0.24, 0.19, 0.16, 0.14, 0.12, 0.15][idx] || 0.1;
-              return acc;
-            }, {} as Record<string, number>) : 
-            { 'feature_1': 0.24, 'feature_2': 0.19, 'feature_3': 0.16 }
-        },
-        {
-          model_name: 'Gradient Boosting',
-          cv_scores: [0.876, 0.883, 0.879, 0.881, 0.875],
-          mean_score: 0.8788,
-          std_score: 0.0034,
-          training_time: 5.8,
-          best_params: { 
-            n_estimators: 150, 
-            learning_rate: 0.1, 
-            max_depth: 6 
-          },
-          feature_importance: actualFeatures.length > 0 ? 
-            actualFeatures.slice(0, 6).reduce((acc, feature, idx) => {
-              acc[feature] = [0.22, 0.21, 0.18, 0.15, 0.13, 0.11][idx] || 0.1;
-              return acc;
-            }, {} as Record<string, number>) : 
-            { 'feature_1': 0.22, 'feature_2': 0.21, 'feature_3': 0.18 }
-        },
-        {
-          model_name: 'XGBoost',
-          cv_scores: [0.901, 0.895, 0.903, 0.899, 0.897],
-          mean_score: 0.8990,
-          std_score: 0.0031,
-          training_time: 4.1,
-          best_params: { 
-            n_estimators: 200, 
-            learning_rate: 0.05, 
-            max_depth: 8,
-            subsample: 0.8
-          },
-          feature_importance: actualFeatures.length > 0 ? 
-            actualFeatures.slice(0, 6).reduce((acc, feature, idx) => {
-              acc[feature] = [0.26, 0.20, 0.17, 0.13, 0.12, 0.12][idx] || 0.1;
-              return acc;
-            }, {} as Record<string, number>) : 
-            { 'feature_1': 0.26, 'feature_2': 0.20, 'feature_3': 0.17 }
-        },
-        {
-          model_name: 'Logistic Regression',
-          cv_scores: [0.832, 0.829, 0.835, 0.831, 0.828],
-          mean_score: 0.8310,
-          std_score: 0.0026,
-          training_time: 0.8,
-          best_params: { 
-            C: 1.0, 
-            penalty: 'l2', 
-            solver: 'liblinear' 
-          },
-          feature_importance: actualFeatures.length > 0 ? 
-            actualFeatures.slice(0, 5).reduce((acc, feature, idx) => {
-              acc[feature] = [0.25, 0.22, 0.19, 0.18, 0.16][idx] || 0.1;
-              return acc;
-            }, {} as Record<string, number>) : 
-            { 'feature_1': 0.25, 'feature_2': 0.22, 'feature_3': 0.19 }
-        }
-      ];
-
-      // Filter models based on config
-      const selectedModels = mockModels.filter(model => {
-        const modelKey = model.model_name.toLowerCase().replace(/\s+/g, '_');
-        return config.models_to_try.includes(modelKey) || config.models_to_try.includes('random_forest');
-      });
-
-      const bestModel = selectedModels.reduce((best, current) => 
-        current.mean_score > best.mean_score ? current : best
-      );
-
-      return {
-        best_model: {
-          model_name: bestModel.model_name,
-          cv_scores: bestModel.cv_scores,
-          mean_score: bestModel.mean_score,
-          std_score: bestModel.std_score,
-          fold_results: bestModel.cv_scores.map((score, idx) => ({
-            fold_idx: idx + 1,
-            train_score: score + 0.02 + Math.random() * 0.01,
-            val_score: score,
-            train_time: bestModel.training_time / 5,
-            model_params: bestModel.best_params,
-            train_indices: [],
-            val_indices: [],
-            val_predictions: [],
-            val_actual: []
-          })),
-          feature_importance: bestModel.feature_importance || {},
-          training_time: bestModel.training_time,
-          all_predictions: [],
-          all_actuals: []
-        },
-        all_models: selectedModels.map(model => ({
-          model_name: model.model_name,
-          cv_scores: model.cv_scores,
-          mean_score: model.mean_score,
-          std_score: model.std_score,
-          fold_results: model.cv_scores.map((score, idx) => ({
-            fold_idx: idx + 1,
-            train_score: score + 0.02 + Math.random() * 0.01,
-            val_score: score,
-            train_time: model.training_time / 5,
-            model_params: model.best_params,
-            train_indices: [],
-            val_indices: [],
-            val_predictions: [],
-            val_actual: []
-          })),
-          feature_importance: model.feature_importance || {},
-          training_time: model.training_time,
-          all_predictions: [],
-          all_actuals: []
-        })),
-        training_config: config,
-        data_profile: mockDataProfile,
-        cv_summary: {
-          n_splits: config.cv_folds,
-          test_size: config.test_size,
-          random_state: config.random_seed,
-          best_score: bestModel.mean_score,
-          best_model: bestModel.model_name
-        },
-        model_comparison: {
-          models_trained: selectedModels.length,
-          total_time: selectedModels.reduce((sum, model) => sum + model.training_time, 0),
-          best_performer: bestModel.model_name
-        },
-        prediction_analysis: {
-          task_type: config.task_type,
-          target_column: config.target_column,
-          metrics_used: config.task_type === 'classification' ? 'accuracy' : 'r2_score'
-        }
-      };
+      console.log('[Results] No Python results found - training only works with Python integration');
+      return null;
     }
   },
 
@@ -1278,7 +1054,7 @@ export const tauriAPI = {
       console.log('Loading available models...');
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Load models from saved training results
+      // Load models from saved training results (only real ones, no mock data)
       const savedModels = JSON.parse(localStorage.getItem('trained_models') || '[]');
       const availableModels = savedModels.map((model: any) => {
         const featureImportance = model.feature_importance || {};
@@ -1363,64 +1139,11 @@ export const tauriAPI = {
       }
     }
     
-    // Use client-side prediction when Python is unavailable
-    {
-      console.log('Making prediction...');
-      console.log('Model path:', modelPath);
-      console.log('CSV data length:', csvData.length);
-      console.log('Use ONNX:', useOnnx);
-      
-      // Generate progress updates
-      progressCallback?.({ stage: 'loading', progress: 20, message: 'Loading model and data...' });
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      progressCallback?.({ stage: 'predicting', progress: 60, message: 'Making predictions...' });
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      progressCallback?.({ stage: 'processing', progress: 90, message: 'Processing results...' });
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Parse CSV to get row count
-      const rows = csvData.split('\n').filter(row => row.trim());
-      const dataRows = rows.slice(1); // Exclude header
-      const numPredictions = dataRows.length;
-      
-      // Generate predictions based on input data
-      const predictions = Array.from({ length: numPredictions }, () => Math.random() * 100);
-      
-      const predictionStats = {
-        count: numPredictions,
-        mean: predictions.reduce((a, b) => a + b) / predictions.length,
-        std: Math.sqrt(predictions.reduce((sum, val) => sum + Math.pow(val - predictions.reduce((a, b) => a + b) / predictions.length, 2), 0) / predictions.length),
-        min: Math.min(...predictions),
-        max: Math.max(...predictions),
-      };
-      
-      // Add predictions column to CSV
-      const outputRows = [
-        rows[0] + ',prediction',
-        ...dataRows.map((row, idx) => `${row},${predictions[idx].toFixed(4)}`)
-      ];
-      
-      progressCallback?.({ stage: 'completed', progress: 100, message: 'Prediction completed!' });
-      
-      return {
-        success: true,
-        predictions,
-        prediction_stats: predictionStats,
-        output_csv: outputRows.join('\n'),
-        input_shape: [numPredictions, rows[0].split(',').length],
-        prediction_method: useOnnx ? 'onnx' : 'pickle',
-        model_metadata: {
-          model_name: modelPath.split('/').pop() || 'unknown',
-          model_type: 'random_forest',
-          task_type: 'regression',
-          target_column: 'target',
-          training_score: 0.85 + Math.random() * 0.1,
-        },
-        message: `Successfully made ${numPredictions} predictions using ${useOnnx ? 'ONNX' : 'pickle'} model`
-      };
-    }
+    // Predictions require Python integration
+    return {
+      success: false,
+      error: 'Predictions require Python integration. Please use the desktop app version or set up Python API.'
+    };
   },
 
   async makeSinglePrediction(
@@ -1450,30 +1173,11 @@ export const tauriAPI = {
       }
     }
     
-    // Use client-side prediction when Python is unavailable
-    {
-      console.log('Making single prediction...');
-      console.log('Model path:', modelPath);
-      console.log('Input values:', values);
-      
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Generate single prediction based on input values
-      const prediction = values.reduce((sum, val) => sum + val, 0) / values.length + Math.random() * 10;
-      
-      return {
-        success: true,
-        prediction,
-        prediction_method: 'onnx',
-        model_metadata: {
-          model_name: modelPath.split('/').pop() || 'unknown',
-          model_type: 'random_forest',
-          task_type: 'regression',
-          training_score: 0.85 + Math.random() * 0.1,
-        },
-        message: `Single prediction: ${prediction.toFixed(4)}`
-      };
-    }
+    // Single predictions require Python integration
+    return {
+      success: false,
+      error: 'Single predictions require Python integration. Please use the desktop app version or set up Python API.'
+    };
   },
 
   // Save prediction history to localStorage
