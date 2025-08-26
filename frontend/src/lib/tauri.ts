@@ -1,5 +1,12 @@
 
 import type { DataProfile, TrainingConfig, TrainingResults, CSVParseOptions } from './types';
+import type { 
+  ProjectConfig, 
+  CreateProjectRequest, 
+  ProjectValidationResult, 
+  ProjectSummary,
+  ProjectStructure 
+} from './project-types';
 
 const isTauri = typeof window !== 'undefined' && (window as unknown as { __TAURI__?: boolean }).__TAURI__;
 
@@ -19,6 +26,197 @@ async function loadTauriAPI() {
 // Mock data removed - app now requires real Python integration
 
 export const tauriAPI = {
+  // Project Management APIs
+  async selectProjectDirectory(): Promise<string | null> {
+    await loadTauriAPI();
+    
+    if (isTauri && invoke) {
+      try {
+        return await invoke('select_directory') as string | null;
+      } catch (error) {
+        console.error('Error selecting directory:', error);
+        return null;
+      }
+    } else {
+      console.log('[Mock] Selecting project directory...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return '/Users/user/AutoQuanta_Projects';
+    }
+  },
+
+  async createProject(request: CreateProjectRequest): Promise<{ success: boolean; projectConfig?: ProjectConfig; error?: string }> {
+    await loadTauriAPI();
+    
+    if (isTauri && invoke) {
+      try {
+        return await invoke('create_project', { request }) as { success: boolean; projectConfig?: ProjectConfig; error?: string };
+      } catch (error) {
+        console.error('Error creating project:', error);
+        return { success: false, error: `Failed to create project: ${error}` };
+      }
+    } else {
+      console.log('[Mock] Creating project:', request.name);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const projectPath = `${request.parentDirectory}/${request.name.replace(/\s+/g, '_')}`;
+      const projectConfig: ProjectConfig = {
+        metadata: {
+          id: `project_${Date.now()}`,
+          name: request.name,
+          description: request.description,
+          createdAt: new Date().toISOString(),
+          lastModified: new Date().toISOString(),
+          version: '1.0.0',
+          projectPath,
+          author: request.author,
+        },
+        structure: {
+          projectPath,
+          dataPath: `${projectPath}/data`,
+          modelsPath: `${projectPath}/models`,
+          resultsPath: `${projectPath}/results`,
+          predictionsPath: `${projectPath}/predictions`,
+          exportsPath: `${projectPath}/exports`,
+        },
+        settings: {
+          defaultTaskType: 'classification',
+          autoSaveResults: true,
+          maxModelVersions: 10,
+          dataValidationStrict: true,
+          enableModelVersioning: true,
+        }
+      };
+      
+      return { success: true, projectConfig };
+    }
+  },
+
+  async loadProject(projectPath: string): Promise<{ success: boolean; projectConfig?: ProjectConfig; error?: string }> {
+    await loadTauriAPI();
+    
+    if (isTauri && invoke) {
+      try {
+        return await invoke('load_project', { projectPath }) as { success: boolean; projectConfig?: ProjectConfig; error?: string };
+      } catch (error) {
+        console.error('Error loading project:', error);
+        return { success: false, error: `Failed to load project: ${error}` };
+      }
+    } else {
+      console.log('[Mock] Loading project from:', projectPath);
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Mock project config
+      const projectConfig: ProjectConfig = {
+        metadata: {
+          id: 'mock_project_1',
+          name: 'Sample Project',
+          description: 'A sample AutoQuanta project',
+          createdAt: '2024-01-01T00:00:00.000Z',
+          lastModified: new Date().toISOString(),
+          version: '1.0.0',
+          projectPath,
+          author: 'AutoQuanta User',
+        },
+        structure: {
+          projectPath,
+          dataPath: `${projectPath}/data`,
+          modelsPath: `${projectPath}/models`,
+          resultsPath: `${projectPath}/results`,
+          predictionsPath: `${projectPath}/predictions`,
+          exportsPath: `${projectPath}/exports`,
+        },
+        settings: {
+          defaultTaskType: 'classification',
+          autoSaveResults: true,
+          maxModelVersions: 10,
+          dataValidationStrict: true,
+          enableModelVersioning: true,
+        }
+      };
+      
+      return { success: true, projectConfig };
+    }
+  },
+
+  async validateProject(projectPath: string): Promise<ProjectValidationResult> {
+    await loadTauriAPI();
+    
+    if (isTauri && invoke) {
+      try {
+        return await invoke('validate_project', { projectPath }) as ProjectValidationResult;
+      } catch (error) {
+        console.error('Error validating project:', error);
+        return {
+          isValid: false,
+          errors: [`Validation failed: ${error}`],
+          warnings: [],
+          missingDirectories: []
+        };
+      }
+    } else {
+      console.log('[Mock] Validating project:', projectPath);
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      return {
+        isValid: true,
+        errors: [],
+        warnings: [],
+        missingDirectories: []
+      };
+    }
+  },
+
+  async getProjectSummary(projectPath: string): Promise<ProjectSummary | null> {
+    await loadTauriAPI();
+    
+    if (isTauri && invoke) {
+      try {
+        return await invoke('get_project_summary', { projectPath }) as ProjectSummary;
+      } catch (error) {
+        console.error('Error getting project summary:', error);
+        return null;
+      }
+    } else {
+      console.log('[Mock] Getting project summary for:', projectPath);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      return {
+        metadata: {
+          id: 'mock_project_1',
+          name: 'Sample Project',
+          description: 'A sample AutoQuanta project',
+          createdAt: '2024-01-01T00:00:00.000Z',
+          lastModified: new Date().toISOString(),
+          version: '1.0.0',
+          projectPath,
+        },
+        stats: {
+          totalModels: 0,
+          totalPredictions: 0,
+          totalDataFiles: 0,
+          diskUsage: '0 MB'
+        }
+      };
+    }
+  },
+
+  async selectProjectFile(): Promise<string | null> {
+    await loadTauriAPI();
+    
+    if (isTauri && invoke) {
+      try {
+        return await invoke('select_project_file') as string | null;
+      } catch (error) {
+        console.error('Error selecting project file:', error);
+        return null;
+      }
+    } else {
+      console.log('[Mock] Selecting project file...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return '/Users/user/AutoQuanta_Projects/MyProject/project.json';
+    }
+  },
+
   async openProject(): Promise<string | null> {
     await loadTauriAPI();
     
@@ -33,23 +231,6 @@ export const tauriAPI = {
       console.log('[Mock] Opening project...');
       await new Promise(resolve => setTimeout(resolve, 500));
       return '/Users/user/projects/autoquanta-demo';
-    }
-  },
-
-  async createProject(path: string, name: string): Promise<boolean> {
-    await loadTauriAPI();
-    
-    if (isTauri && invoke) {
-      try {
-        return await invoke('create_project', { path, name }) as boolean;
-      } catch (error) {
-        console.error('Error creating project:', error);
-        return false;
-      }
-    } else {
-      console.log(`[Mock] Creating project: ${name} at ${path}`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      return true;
     }
   },
 
