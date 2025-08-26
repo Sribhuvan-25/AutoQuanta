@@ -1,25 +1,26 @@
 /**
- * Project slice for Redux store
- * Manages project creation, loading, and metadata
+ * Enhanced Project slice for Redux store
+ * Manages project creation, loading, and metadata with new project system
  */
 
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import type { ProjectMetadata } from '@/lib/types';
+import type { ProjectConfig, CreateProjectRequest, ProjectSummary } from '@/lib/project-types';
 import { tauriAPI } from '@/lib/tauri';
 
-// State interface
+// Enhanced State interface
 interface ProjectState {
   // Current project
-  currentProject: ProjectMetadata | null;
+  currentProject: ProjectConfig | null;
   isProjectLoaded: boolean;
   
   // Recent projects
-  recentProjects: ProjectMetadata[];
+  recentProjects: ProjectSummary[];
   
   // Loading states
   isCreatingProject: boolean;
   isLoadingProject: boolean;
   isSavingProject: boolean;
+  isValidatingProject: boolean;
   
   // Error handling
   error: string | null;
@@ -27,6 +28,9 @@ interface ProjectState {
   // Project settings
   autoSave: boolean;
   lastSavedAt: string | null;
+  
+  // UI state
+  showCreateWizard: boolean;
 }
 
 // Initial state
@@ -37,33 +41,23 @@ const initialState: ProjectState = {
   isCreatingProject: false,
   isLoadingProject: false,
   isSavingProject: false,
+  isValidatingProject: false,
   error: null,
   autoSave: true,
   lastSavedAt: null,
+  showCreateWizard: false,
 };
 
-// Async thunks for project operations
-export const createProject = createAsyncThunk(
+// Enhanced async thunks for project operations
+export const createNewProject = createAsyncThunk(
   'project/create',
-  async ({ name, path }: { name: string; path: string }, { rejectWithValue }) => {
+  async (request: CreateProjectRequest, { rejectWithValue }) => {
     try {
-      const success = await tauriAPI.createProject(path, name);
-      if (!success) {
-        throw new Error('Failed to create project');
+      const result = await tauriAPI.createProject(request);
+      if (!result.success || !result.projectConfig) {
+        throw new Error(result.error || 'Failed to create project');
       }
-      
-      const project: ProjectMetadata = {
-        name,
-        path,
-        created_at: new Date().toISOString(),
-        last_modified: new Date().toISOString(),
-        data_files: [],
-        models: [],
-        description: '',
-        tags: []
-      };
-      
-      return project;
+      return result.projectConfig;
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to create project');
     }
@@ -74,53 +68,45 @@ export const loadProject = createAsyncThunk(
   'project/load',
   async (projectPath: string, { rejectWithValue }) => {
     try {
-      // In a real implementation, this would load project metadata
-      // For now, we'll create a mock project
-      const project: ProjectMetadata = {
-        name: projectPath.split('/').pop() || 'Unknown Project',
-        path: projectPath,
-        created_at: new Date().toISOString(),
-        last_modified: new Date().toISOString(),
-        data_files: [],
-        models: [],
-        description: '',
-        tags: []
-      };
-      
-      return project;
+      const result = await tauriAPI.loadProject(projectPath);
+      if (!result.success || !result.projectConfig) {
+        throw new Error(result.error || 'Failed to load project');
+      }
+      return result.projectConfig;
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to load project');
     }
   }
 );
 
-export const saveProject = createAsyncThunk(
-  'project/save',
-  async (_, { getState, rejectWithValue }) => {
+export const validateProject = createAsyncThunk(
+  'project/validate',
+  async (projectPath: string, { rejectWithValue }) => {
     try {
-      const state = getState() as { project: ProjectState };
-      const { currentProject } = state.project;
-      
-      if (!currentProject) {
-        throw new Error('No project to save');
-      }
-      
-      // Update last modified timestamp
-      const updatedProject = {
-        ...currentProject,
-        last_modified: new Date().toISOString()
-      };
-      
-      // In a real implementation, this would save to the file system
-      // For now, we'll just return the updated project
-      return updatedProject;
+      const result = await tauriAPI.validateProject(projectPath);
+      return result;
     } catch (error) {
-      return rejectWithValue(error instanceof Error ? error.message : 'Failed to save project');
+      return rejectWithValue(error instanceof Error ? error.message : 'Failed to validate project');
     }
   }
 );
 
-// Project slice
+export const getProjectSummary = createAsyncThunk(
+  'project/summary',
+  async (projectPath: string, { rejectWithValue }) => {
+    try {
+      const summary = await tauriAPI.getProjectSummary(projectPath);
+      if (!summary) {
+        throw new Error('Failed to get project summary');
+      }
+      return summary;
+    } catch (error) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Failed to get project summary');
+    }
+  }
+);
+
+// Enhanced project slice
 const projectSlice = createSlice({
   name: 'project',
   initialState,
@@ -133,38 +119,41 @@ const projectSlice = createSlice({
     },
     
     // Update project metadata
-    updateProjectMetadata: (state, action: PayloadAction<Partial<ProjectMetadata>>) => {
+    updateProjectMetadata: (state, action: PayloadAction<Partial<ProjectConfig['metadata']>>) => {
       if (state.currentProject) {
-        state.currentProject = { ...state.currentProject, ...action.payload };
+        state.currentProject.metadata = { 
+          ...state.currentProject.metadata, 
+          ...action.payload,
+          lastModified: new Date().toISOString()
+        };
       }
     },
     
-    // Add data file to project
-    addDataFile: (state, action: PayloadAction<string>) => {
-      if (state.currentProject && !state.currentProject.data_files.includes(action.payload)) {
-        state.currentProject.data_files.push(action.payload);
-      }
-    },
-    
-    // Remove data file from project
-    removeDataFile: (state, action: PayloadAction<string>) => {
+    // Update project settings
+    updateProjectSettings: (state, action: PayloadAction<Partial<ProjectConfig['settings']>>) => {
       if (state.currentProject) {
-        state.currentProject.data_files = state.currentProject.data_files.filter(
-          file => file !== action.payload
-        );
+        state.currentProject.settings = { 
+          ...state.currentProject.settings, 
+          ...action.payload 
+        };
       }
     },
     
-    // Add model to project
-    addModel: (state, action: PayloadAction<string>) => {
-      if (state.currentProject && !state.currentProject.models.includes(action.payload)) {
-        state.currentProject.models.push(action.payload);
-      }
+    // Show/hide create wizard
+    showCreateWizard: (state) => {
+      state.showCreateWizard = true;
+      state.error = null;
+    },
+    
+    hideCreateWizard: (state) => {
+      state.showCreateWizard = false;
     },
     
     // Add to recent projects
-    addToRecentProjects: (state, action: PayloadAction<ProjectMetadata>) => {
-      const existingIndex = state.recentProjects.findIndex(p => p.path === action.payload.path);
+    addToRecentProjects: (state, action: PayloadAction<ProjectSummary>) => {
+      const existingIndex = state.recentProjects.findIndex(
+        p => p.metadata.projectPath === action.payload.metadata.projectPath
+      );
       
       if (existingIndex >= 0) {
         // Move to front if already exists
@@ -178,7 +167,9 @@ const projectSlice = createSlice({
     
     // Remove from recent projects
     removeFromRecentProjects: (state, action: PayloadAction<string>) => {
-      state.recentProjects = state.recentProjects.filter(p => p.path !== action.payload);
+      state.recentProjects = state.recentProjects.filter(
+        p => p.metadata.projectPath !== action.payload
+      );
     },
     
     // Toggle auto-save
@@ -194,25 +185,38 @@ const projectSlice = createSlice({
   extraReducers: (builder) => {
     // Create project
     builder
-      .addCase(createProject.pending, (state) => {
+      .addCase(createNewProject.pending, (state) => {
         state.isCreatingProject = true;
         state.error = null;
       })
-      .addCase(createProject.fulfilled, (state, action) => {
+      .addCase(createNewProject.fulfilled, (state, action) => {
         state.isCreatingProject = false;
         state.currentProject = action.payload;
         state.isProjectLoaded = true;
         state.error = null;
+        state.showCreateWizard = false;
+        
+        // Create project summary for recent projects
+        const projectSummary: ProjectSummary = {
+          metadata: action.payload.metadata,
+          stats: {
+            totalModels: 0,
+            totalPredictions: 0,
+            totalDataFiles: 0,
+          }
+        };
         
         // Add to recent projects
-        const existingIndex = state.recentProjects.findIndex(p => p.path === action.payload.path);
+        const existingIndex = state.recentProjects.findIndex(
+          p => p.metadata.projectPath === action.payload.metadata.projectPath
+        );
         if (existingIndex >= 0) {
           state.recentProjects.splice(existingIndex, 1);
         }
-        state.recentProjects.unshift(action.payload);
+        state.recentProjects.unshift(projectSummary);
         state.recentProjects = state.recentProjects.slice(0, 10);
       })
-      .addCase(createProject.rejected, (state, action) => {
+      .addCase(createNewProject.rejected, (state, action) => {
         state.isCreatingProject = false;
         state.error = action.payload as string;
       });
@@ -229,12 +233,24 @@ const projectSlice = createSlice({
         state.isProjectLoaded = true;
         state.error = null;
         
+        // Create project summary for recent projects
+        const projectSummary: ProjectSummary = {
+          metadata: action.payload.metadata,
+          stats: {
+            totalModels: 0,
+            totalPredictions: 0,
+            totalDataFiles: 0,
+          }
+        };
+        
         // Add to recent projects
-        const existingIndex = state.recentProjects.findIndex(p => p.path === action.payload.path);
+        const existingIndex = state.recentProjects.findIndex(
+          p => p.metadata.projectPath === action.payload.metadata.projectPath
+        );
         if (existingIndex >= 0) {
           state.recentProjects.splice(existingIndex, 1);
         }
-        state.recentProjects.unshift(action.payload);
+        state.recentProjects.unshift(projectSummary);
         state.recentProjects = state.recentProjects.slice(0, 10);
       })
       .addCase(loadProject.rejected, (state, action) => {
@@ -242,21 +258,40 @@ const projectSlice = createSlice({
         state.error = action.payload as string;
       });
     
-    // Save project
+    // Validate project
     builder
-      .addCase(saveProject.pending, (state) => {
-        state.isSavingProject = true;
+      .addCase(validateProject.pending, (state) => {
+        state.isValidatingProject = true;
         state.error = null;
       })
-      .addCase(saveProject.fulfilled, (state, action) => {
-        state.isSavingProject = false;
-        state.currentProject = action.payload;
-        state.lastSavedAt = new Date().toISOString();
-        state.error = null;
+      .addCase(validateProject.fulfilled, (state, action) => {
+        state.isValidatingProject = false;
+        if (!action.payload.isValid) {
+          state.error = `Project validation failed: ${action.payload.errors.join(', ')}`;
+        }
       })
-      .addCase(saveProject.rejected, (state, action) => {
-        state.isSavingProject = false;
+      .addCase(validateProject.rejected, (state, action) => {
+        state.isValidatingProject = false;
         state.error = action.payload as string;
+      });
+
+    // Get project summary
+    builder
+      .addCase(getProjectSummary.pending, (state) => {
+        // No loading state needed for this
+      })
+      .addCase(getProjectSummary.fulfilled, (state, action) => {
+        // Update the project in recent projects with fresh stats
+        const existingIndex = state.recentProjects.findIndex(
+          p => p.metadata.projectPath === action.payload.metadata.projectPath
+        );
+        if (existingIndex >= 0) {
+          state.recentProjects[existingIndex] = action.payload;
+        }
+      })
+      .addCase(getProjectSummary.rejected, (state, action) => {
+        // Silently fail for summary updates
+        console.warn('Failed to update project summary:', action.payload);
       });
   },
 });
@@ -265,9 +300,9 @@ const projectSlice = createSlice({
 export const {
   clearProject,
   updateProjectMetadata,
-  addDataFile,
-  removeDataFile,
-  addModel,
+  updateProjectSettings,
+  showCreateWizard,
+  hideCreateWizard,
   addToRecentProjects,
   removeFromRecentProjects,
   toggleAutoSave,
@@ -277,13 +312,28 @@ export const {
 // Export reducer
 export default projectSlice.reducer;
 
-// Selectors
+// Enhanced selectors
 export const selectCurrentProject = (state: { project: ProjectState }) => state.project.currentProject;
 export const selectIsProjectLoaded = (state: { project: ProjectState }) => state.project.isProjectLoaded;
 export const selectRecentProjects = (state: { project: ProjectState }) => state.project.recentProjects;
 export const selectProjectError = (state: { project: ProjectState }) => state.project.error;
+export const selectShowCreateWizard = (state: { project: ProjectState }) => state.project.showCreateWizard;
+
 export const selectProjectLoadingStates = (state: { project: ProjectState }) => ({
   isCreating: state.project.isCreatingProject,
   isLoading: state.project.isLoadingProject,
   isSaving: state.project.isSavingProject,
+  isValidating: state.project.isValidatingProject,
 });
+
+export const selectProjectMetadata = (state: { project: ProjectState }) => 
+  state.project.currentProject?.metadata || null;
+
+export const selectProjectStructure = (state: { project: ProjectState }) => 
+  state.project.currentProject?.structure || null;
+
+export const selectProjectSettings = (state: { project: ProjectState }) => 
+  state.project.currentProject?.settings || null;
+
+export const selectProjectPath = (state: { project: ProjectState }) => 
+  state.project.currentProject?.metadata?.projectPath || null;
