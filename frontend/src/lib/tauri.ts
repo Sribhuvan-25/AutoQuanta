@@ -217,6 +217,90 @@ export const tauriAPI = {
     }
   },
 
+  // Project-aware training operations
+  async saveTrainingResultsToProject(
+    projectConfig: ProjectConfig,
+    trainingResults: any,
+    config: TrainingConfig
+  ): Promise<{ success: boolean; resultPath?: string; error?: string }> {
+    await loadTauriAPI();
+    
+    if (isTauri && invoke) {
+      try {
+        return await invoke('save_training_results', { 
+          projectPath: projectConfig.metadata.projectPath,
+          results: trainingResults,
+          config 
+        }) as { success: boolean; resultPath?: string; error?: string };
+      } catch (error) {
+        console.error('Error saving training results:', error);
+        return { success: false, error: `Failed to save training results: ${error}` };
+      }
+    } else {
+      console.log('[Mock] Saving training results to project:', projectConfig.metadata.name);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Mock save to project results directory
+      const resultPath = `${projectConfig.structure.resultsPath}/training_${Date.now()}.json`;
+      console.log('[Mock] Results saved to:', resultPath);
+      
+      return { success: true, resultPath };
+    }
+  },
+
+  async saveModelToProject(
+    projectConfig: ProjectConfig,
+    modelData: any,
+    modelName: string,
+    version?: string
+  ): Promise<{ success: boolean; modelPath?: string; error?: string }> {
+    await loadTauriAPI();
+    
+    if (isTauri && invoke) {
+      try {
+        return await invoke('save_model', { 
+          projectPath: projectConfig.metadata.projectPath,
+          modelData,
+          modelName,
+          version
+        }) as { success: boolean; modelPath?: string; error?: string };
+      } catch (error) {
+        console.error('Error saving model:', error);
+        return { success: false, error: `Failed to save model: ${error}` };
+      }
+    } else {
+      console.log('[Mock] Saving model to project:', modelName);
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const versionSuffix = version ? `_v${version}` : `_v1`;
+      const modelPath = `${projectConfig.structure.modelsPath}/${modelName}${versionSuffix}`;
+      console.log('[Mock] Model saved to:', modelPath);
+      
+      return { success: true, modelPath };
+    }
+  },
+
+  async loadModelsFromProject(
+    projectPath: string
+  ): Promise<{ success: boolean; models?: any[]; error?: string }> {
+    await loadTauriAPI();
+    
+    if (isTauri && invoke) {
+      try {
+        return await invoke('load_project_models', { projectPath }) as { success: boolean; models?: any[]; error?: string };
+      } catch (error) {
+        console.error('Error loading project models:', error);
+        return { success: false, error: `Failed to load models: ${error}` };
+      }
+    } else {
+      console.log('[Mock] Loading models from project:', projectPath);
+      await new Promise(resolve => setTimeout(resolve, 400));
+      
+      // Return empty models list for now
+      return { success: true, models: [] };
+    }
+  },
+
   async openProject(): Promise<string | null> {
     await loadTauriAPI();
     

@@ -18,11 +18,18 @@ import {
   selectModelComparison,
   selectBestModel,
   selectTrainingError,
+  selectResultsSavedToProject,
+  selectProjectSavePath,
   clearError
 } from '@/store/slices/trainingSlice';
 import { selectCurrentDataset } from '@/store/slices/dataSlice';
+import { 
+  selectCurrentProject, 
+  selectIsProjectLoaded,
+  showCreateWizard 
+} from '@/store/slices/projectSlice';
 import type { TrainingConfig as TrainingConfigType } from '@/lib/types';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Folder, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function TrainPage() {
@@ -36,12 +43,22 @@ export default function TrainPage() {
   const bestModel = useAppSelector(selectBestModel);
   const trainingError = useAppSelector(selectTrainingError);
   const currentDataset = useAppSelector(selectCurrentDataset);
+  const currentProject = useAppSelector(selectCurrentProject);
+  const isProjectLoaded = useAppSelector(selectIsProjectLoaded);
+  const resultsSavedToProject = useAppSelector(selectResultsSavedToProject);
+  const projectSavePath = useAppSelector(selectProjectSavePath);
   
   const [showResults, setShowResults] = useState(false);
   const [selectedModel, setSelectedModel] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleStartTraining = async (config: TrainingConfigType) => {
+    // Check if project is loaded
+    if (!isProjectLoaded || !currentProject) {
+      dispatch(showCreateWizard());
+      return;
+    }
+
     try {
       setShowResults(false);
       
@@ -51,7 +68,13 @@ export default function TrainPage() {
         filePath: currentDataset.filePath
       } : undefined;
       
-      const result = await dispatch(startTraining({ config, datasetData }));
+      // Include project information in training request
+      const result = await dispatch(startTraining({ 
+        config, 
+        datasetData, 
+        projectConfig: currentProject 
+      }));
+      
       if (startTraining.fulfilled.match(result)) {
         setShowResults(true);
       }
@@ -92,7 +115,41 @@ export default function TrainPage() {
           <p className="text-gray-600 mt-1">
             Configure and train machine learning models on your data.
           </p>
+          {currentProject && (
+            <div className="mt-3 flex items-center gap-2 text-sm text-blue-700 bg-blue-50 px-3 py-2 rounded-lg">
+              <Folder className="h-4 w-4" />
+              <span>
+                Training results will be saved to: <strong>{currentProject.metadata.name}</strong>
+              </span>
+            </div>
+          )}
         </div>
+
+        {/* Project Requirement Notice */}
+        {!isProjectLoaded && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
+            <div className="flex items-start justify-between">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+                <div>
+                  <h3 className="text-sm font-medium text-amber-800">Project Required</h3>
+                  <p className="text-sm text-amber-700 mt-1">
+                    You need to create or select a project before training models. Projects help organize your data, models, and results.
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => dispatch(showCreateWizard())}
+                className="text-amber-600 border-amber-300"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create Project
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Error Display */}
         {trainingError && (
@@ -137,19 +194,46 @@ export default function TrainPage() {
 
         {/* Training Results */}
         {(showResults || currentResults) && (
-          <TrainingResults
-            results={currentResults}
-            modelComparison={modelComparison}
-            bestModel={bestModel}
-            onExportResults={handleExportResults}
-            onViewDetails={(modelName) => {
-              const model = modelComparison.find(m => m.model_name === modelName);
-              if (model) {
-                setSelectedModel(model);
-                setIsModalOpen(true);
-              }
-            }}
-          />
+          <>
+            <TrainingResults
+              results={currentResults}
+              modelComparison={modelComparison}
+              bestModel={bestModel}
+              onExportResults={handleExportResults}
+              onViewDetails={(modelName) => {
+                const model = modelComparison.find(m => m.model_name === modelName);
+                if (model) {
+                  setSelectedModel(model);
+                  setIsModalOpen(true);
+                }
+              }}
+            />
+
+            {/* Project Save Status */}
+            {resultsSavedToProject && currentProject && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-green-800">Results Saved to Project</h3>
+                    <p className="text-sm text-green-700 mt-1">
+                      Training results and models have been saved to <strong>{currentProject.metadata.name}</strong>
+                      {projectSavePath && (
+                        <>
+                          <br />
+                          <span className="text-xs font-mono text-green-600">{projectSavePath}</span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Model Details Modal */}

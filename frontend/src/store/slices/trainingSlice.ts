@@ -5,12 +5,18 @@
 
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { TrainingConfig, TrainingResults, ModelPerformance } from '@/lib/types';
+import type { ProjectConfig } from '@/lib/project-types';
 import { tauriAPI } from '@/lib/tauri';
 
 // Training state interface
 interface TrainingState {
   // Training configuration
   config: TrainingConfig | null;
+  
+  // Project context
+  currentProjectConfig: ProjectConfig | null;
+  resultsSavedToProject: boolean;
+  projectSavePath: string | null;
   
   // Training status
   isTraining: boolean;
@@ -39,6 +45,9 @@ interface TrainingState {
 // Initial state
 const initialState: TrainingState = {
   config: null,
+  currentProjectConfig: null,
+  resultsSavedToProject: false,
+  projectSavePath: null,
   isTraining: false,
   trainingStage: '',
   trainingProgress: 0,
@@ -57,7 +66,11 @@ const initialState: TrainingState = {
 // Async thunks for training operations
 export const startTraining = createAsyncThunk(
   'training/start',
-  async (params: { config: TrainingConfig; datasetData?: { data: string[][]; filePath: string } }, { dispatch, rejectWithValue }) => {
+  async (params: { 
+    config: TrainingConfig; 
+    datasetData?: { data: string[][]; filePath: string };
+    projectConfig?: ProjectConfig;
+  }, { dispatch, rejectWithValue }) => {
     const { config, datasetData } = params;
     try {
       // Validate configuration
@@ -102,6 +115,41 @@ export const startTraining = createAsyncThunk(
               if (status.status === 'completed') {
                 const results = await tauriAPI.getTrainingResults();
                 if (results) {
+                  // Save results to project if project is available
+                  if (params.projectConfig) {
+                    try {
+                      const saveResult = await tauriAPI.saveTrainingResultsToProject(
+                        params.projectConfig,
+                        results,
+                        config
+                      );
+                      
+                      if (saveResult.success) {
+                        console.log('Training results saved to project:', saveResult.resultPath);
+                        
+                        // Save best model to project
+                        if (results.best_model) {
+                          const modelSaveResult = await tauriAPI.saveModelToProject(
+                            params.projectConfig,
+                            results.best_model,
+                            results.best_model.model_name
+                          );
+                          
+                          if (modelSaveResult.success) {
+                            console.log('Best model saved to project:', modelSaveResult.modelPath);
+                          }
+                        }
+                        
+                        // Mark as saved in the result
+                        (results as any).projectSaved = true;
+                        (results as any).projectSavePath = saveResult.resultPath;
+                      } else {
+                        console.warn('Failed to save training results to project:', saveResult.error);
+                      }
+                    } catch (error) {
+                      console.warn('Error saving to project:', error);
+                    }
+                  }
                   resolve(results);
                 } else {
                   reject(new Error('Training completed but no results available'));
@@ -208,6 +256,19 @@ const trainingSlice = createSlice({
         state.warnings.push(action.payload);
       }
     },
+
+    // Set project configuration
+    setProjectConfig: (state, action: PayloadAction<ProjectConfig | null>) => {
+      state.currentProjectConfig = action.payload;
+      state.resultsSavedToProject = false;
+      state.projectSavePath = null;
+    },
+
+    // Mark results as saved to project
+    markResultsSavedToProject: (state, action: PayloadAction<string>) => {
+      state.resultsSavedToProject = true;
+      state.projectSavePath = action.payload;
+    },
     
     // Clear warnings
     clearWarnings: (state) => {
@@ -233,6 +294,9 @@ const trainingSlice = createSlice({
         state.trainingProgress = 0;
         state.estimatedTimeRemaining = null;
         state.config = action.meta.arg.config;
+        state.currentProjectConfig = action.meta.arg.projectConfig || null;
+        state.resultsSavedToProject = false;
+        state.projectSavePath = null;
         state.error = null;
         state.warnings = [];
       })
@@ -242,6 +306,13 @@ const trainingSlice = createSlice({
         state.trainingProgress = 100;
         state.currentResults = action.payload;
         state.error = null;
+        
+        // Check if results were saved to project
+        const results = action.payload as any;
+        if (results.projectSaved) {
+          state.resultsSavedToProject = true;
+          state.projectSavePath = results.projectSavePath;
+        }
         
         // Add to history
         state.trainingHistory.unshift(action.payload);
@@ -307,6 +378,8 @@ export const {
   clearWarnings,
   updateTrainingSettings,
   clearError,
+  setProjectConfig,
+  markResultsSavedToProject,
 } = trainingSlice.actions;
 
 // Export reducer
@@ -324,3 +397,8 @@ export const selectModelComparison = (state: { training: TrainingState }) => sta
 export const selectBestModel = (state: { training: TrainingState }) => state.training.bestModel;
 export const selectTrainingError = (state: { training: TrainingState }) => state.training.error;
 export const selectTrainingWarnings = (state: { training: TrainingState }) => state.training.warnings;
+
+// Project-related selectors
+export const selectCurrentProjectConfig = (state: { training: TrainingState }) => state.training.currentProjectConfig;
+export const selectResultsSavedToProject = (state: { training: TrainingState }) => state.training.resultsSavedToProject;
+export const selectProjectSavePath = (state: { training: TrainingState }) => state.training.projectSavePath;
