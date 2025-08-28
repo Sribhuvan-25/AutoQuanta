@@ -52,7 +52,7 @@ interface DataState {
   filteredData: string[][] | null;
   
   // Analysis results
-  correlationMatrix: Record<string, Record<string, number>> | null;
+  correlationMatrix: Record<string, Record<string, number | null>> | null;
   statisticalSummary: Record<string, unknown> | null;
   
   // Error handling
@@ -241,13 +241,14 @@ export const calculateCorrelations = createAsyncThunk(
       }
 
       // Simple correlation calculation (in a real app, this would use a proper stats library)
-      const correlationMatrix: Record<string, Record<string, number>> = {};
+      const correlationMatrix: Record<string, Record<string, number | null>> = {};
       
       numericColumns.forEach(col1 => {
         correlationMatrix[col1.name] = {};
         numericColumns.forEach(col2 => {
-          // Mock correlation value for now
-          correlationMatrix[col1.name][col2.name] = col1.name === col2.name ? 1 : Math.random() * 2 - 1;
+          // Correlation matrix should be calculated by Python Analysis code
+          // For now, return placeholder until we integrate with Analysis/data_profiler.py
+          correlationMatrix[col1.name][col2.name] = col1.name === col2.name ? 1 : null;
         });
       });
 
