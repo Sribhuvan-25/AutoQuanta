@@ -82,6 +82,77 @@ const initialState: DataState = {
   enableDataCaching: true,
 };
 
+// New FastAPI-based profiling thunk
+export const profileCSVWithAPI = createAsyncThunk(
+  'data/profileCSVAPI',
+  async (
+    { file }: { file: File },
+    { dispatch, rejectWithValue }
+  ) => {
+    try {
+      dispatch(updateProcessingStage({ stage: 'uploading', progress: 10 }));
+      
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('csv_file', file);
+      
+      dispatch(updateProcessingStage({ stage: 'profiling', progress: 50 }));
+      
+      // Call FastAPI profile endpoint
+      const response = await fetch('http://localhost:8000/profile_simple', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Profile request failed: ${response.status}`);
+      }
+      
+      const profileData = await response.json();
+      
+      if (!profileData.success) {
+        throw new Error(profileData.error || 'Profiling failed');
+      }
+      
+      dispatch(updateProcessingStage({ stage: 'parsing', progress: 80 }));
+      
+      // Parse CSV content for display
+      const csvText = await file.text();
+      const parsedData = parseCSV(csvText);
+      
+      dispatch(updateProcessingStage({ stage: 'completed', progress: 100 }));
+      
+      // Transform API response to match our interface
+      const processedDataset: ProcessedDataset = {
+        id: `file_${Date.now()}`,
+        filePath: file.name,
+        fileName: file.name,
+        data: parsedData.rows,
+        headers: parsedData.headers,
+        rows: parsedData.rows,
+        profile: profileData.profile || null,
+        columns: profileData.columns || [],
+        warnings: profileData.warnings || [],
+        metadata: {
+          fileSize: file.size,
+          rowCount: parsedData.rows.length,
+          columnCount: parsedData.headers.length,
+          processedAt: new Date().toISOString(),
+          memoryUsage: 0,
+        },
+        statistical_summary: profileData.statistical_summary || null,
+        quality_report: profileData.quality_report || null,
+      };
+      
+      return processedDataset;
+      
+    } catch (error) {
+      console.error('CSV profiling failed:', error);
+      return rejectWithValue(error instanceof Error ? error.message : 'Unknown error');
+    }
+  }
+);
+
 // Async thunks for data operations
 export const processCSVFile = createAsyncThunk(
   'data/processCSV',
@@ -380,6 +451,32 @@ const dataSlice = createSlice({
         }
       })
       .addCase(processCSVFile.rejected, (state, action) => {
+        state.isProcessing = false;
+        state.processingStage = 'failed';
+        state.error = action.payload as string;
+      })
+      
+      // Profile CSV with API
+      .addCase(profileCSVWithAPI.pending, (state) => {
+        state.isProcessing = true;
+        state.processingStage = 'uploading';
+        state.processingProgress = 0;
+        state.error = null;
+      })
+      .addCase(profileCSVWithAPI.fulfilled, (state, action) => {
+        state.isProcessing = false;
+        state.currentDataset = action.payload;
+        state.selectedColumns = action.payload.headers;
+        state.processingStage = 'completed';
+        state.processingProgress = 100;
+        state.error = null;
+        
+        // Cache the dataset
+        if (state.enableDataCaching) {
+          state.datasetCache[action.payload.filePath] = action.payload;
+        }
+      })
+      .addCase(profileCSVWithAPI.rejected, (state, action) => {
         state.isProcessing = false;
         state.processingStage = 'failed';
         state.error = action.payload as string;

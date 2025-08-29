@@ -156,6 +156,8 @@ def save_trained_model_simple(results, df, target_column: str) -> Dict[str, Any]
         model_dir = Path(f"models/{model_name}_{timestamp}")
         model_dir.mkdir(parents=True, exist_ok=True)
         
+        logger.info(f"Saving model to: {model_dir}")
+        
         # Save model with pickle
         pickle_path = model_dir / "best_model.pkl"
         with open(pickle_path, 'wb') as f:

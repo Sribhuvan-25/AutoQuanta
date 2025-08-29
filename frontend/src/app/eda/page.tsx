@@ -10,7 +10,7 @@ import { CorrelationHeatmap } from '@/components/data/CorrelationHeatmap';
 import { DataQualityReport } from '@/components/data/DataQualityReport';
 import { Button } from '@/components/ui/button';
 import { DataProcessingIndicator } from '@/components/ui/loading';
-import { AlertTriangle, CheckCircle, Info, Download } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Info, Download, Upload } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { 
@@ -23,6 +23,7 @@ import {
   setTargetColumn as setDataTargetColumn,
   selectTargetColumn,
   processCSVFile,
+  profileCSVWithAPI,
   clearCurrentDataset,
   selectStatisticalSummary,
   selectQualityReport,
@@ -64,10 +65,20 @@ export default function EDAPage() {
   const handleFileSelect = useCallback(async (filePath: string, fileInfo?: { name: string; size: number; type: string }) => {
     try {
       if (fileInfo) {
+        // For now, still use old method, but we'll add new API-based method soon
         await dispatch(processCSVFile({ filePath, fileInfo }));
       }
     } catch (error) {
       console.error('Error processing file:', error);
+    }
+  }, [dispatch]);
+
+  // New API-based file upload handler
+  const handleAPIFileUpload = useCallback(async (file: File) => {
+    try {
+      await dispatch(profileCSVWithAPI({ file }));
+    } catch (error) {
+      console.error('Error profiling file with API:', error);
     }
   }, [dispatch]);
 
@@ -144,15 +155,35 @@ export default function EDAPage() {
         {/* File Upload */}
         {!currentDataset && !isProcessing && (
           <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <FileUpload
-              onFileSelect={handleFileSelect}
-              onError={handleFileUploadError}
-              onValidationFailed={handleValidationFailed}
-              title="Upload CSV File"
-              description="Drag and drop your CSV file here or click to browse"
-              disabled={isProcessing}
-              autoProcess={false}
-            />
+            {/* Simple API-based file upload */}
+            <div className="text-center">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8">
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      handleAPIFileUpload(file);
+                    }
+                  }}
+                  className="hidden"
+                  id="csv-file-input"
+                />
+                <label htmlFor="csv-file-input" className="cursor-pointer">
+                  <div className="flex flex-col items-center">
+                    <Upload className="h-12 w-12 text-gray-400 mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">Upload CSV File</h3>
+                    <p className="text-gray-600 mb-4">
+                      Click to select your CSV file for analysis
+                    </p>
+                    <Button type="button">
+                      Choose File
+                    </Button>
+                  </div>
+                </label>
+              </div>
+            </div>
           </div>
         )}
 

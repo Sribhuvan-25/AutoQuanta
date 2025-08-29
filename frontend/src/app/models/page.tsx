@@ -53,38 +53,42 @@ export default function ModelsPage() {
     try {
       setLoading(true);
       
-      // Load models from localStorage (saved by training process)
-      const savedModelsData = localStorage.getItem('trained_models');
-      if (savedModelsData) {
-        const trainedModels = JSON.parse(savedModelsData);
-        
-        // Convert to SavedModel format
-        const formattedModels: SavedModel[] = trainedModels.map((model: any) => ({
+      // Load models from FastAPI backend
+      const response = await fetch('http://localhost:8000/models');
+      const data = await response.json();
+      
+      if (data.success && data.models) {
+        // Convert API response to SavedModel format
+        const formattedModels: SavedModel[] = data.models.map((model: any) => ({
           metadata: {
-            model_name: model.id,
-            export_timestamp: model.createdAt,
-            best_model_type: model.type,
-            best_score: model.accuracy,
+            model_name: model.model_name,
+            export_timestamp: model.export_timestamp,
+            best_model_type: model.model_type || 'unknown',
+            best_score: model.best_score,
             task_type: model.task_type,
             target_column: model.target_column,
-            feature_count: Object.keys(model.feature_importance || {}).length || 0,
-            training_data_shape: [100, 5], // Default shape
-            cv_folds: model.cv_scores?.length || 5,
-            models_trained: [model.type]
+            feature_count: model.feature_count,
+            training_data_shape: model.training_data_shape || [0, 0],
+            cv_folds: 5, // Default, could be added to API response
+            models_trained: [model.model_type || 'unknown']
           },
-          model_path: `/models/${model.id}.pkl`,
-          metadata_path: `/models/${model.id}_metadata.json`,
-          size_mb: parseFloat(model.size?.replace('MB', '') || '5.0'),
-          created_date: new Date(model.createdAt)
+          model_path: model.model_path,
+          metadata_path: model.model_path + '/metadata.json',
+          size_mb: 5.0, // Default, could calculate from file system
+          created_date: new Date(
+            model.export_timestamp.length === 15 
+              ? `${model.export_timestamp.slice(0,4)}-${model.export_timestamp.slice(4,6)}-${model.export_timestamp.slice(6,8)}T${model.export_timestamp.slice(9,11)}:${model.export_timestamp.slice(11,13)}:${model.export_timestamp.slice(13,15)}`
+              : model.export_timestamp
+          )
         }));
         
         setModels(formattedModels);
       } else {
-        // No saved models found
         setModels([]);
       }
     } catch (error) {
-      console.error('Failed to load models:', error);
+      console.error('Failed to load models from API:', error);
+      setModels([]);
     } finally {
       setLoading(false);
     }
@@ -225,9 +229,29 @@ export default function ModelsPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      // Download model functionality
-                      console.log('Download model:', model.metadata.model_name);
+                    onClick={async () => {
+                      try {
+                        // Download the pickle model file
+                        const response = await fetch(`http://localhost:8000/download_model`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ model_path: model.model_path })
+                        });
+                        
+                        if (response.ok) {
+                          const blob = await response.blob();
+                          const url = window.URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `${model.metadata.model_name}_model.zip`;
+                          a.click();
+                          window.URL.revokeObjectURL(url);
+                        } else {
+                          alert('Download failed');
+                        }
+                      } catch (error) {
+                        alert('Download failed');
+                      }
                     }}
                   >
                     <Download className="w-4 h-4" />
@@ -235,9 +259,22 @@ export default function ModelsPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      // Delete model functionality
-                      console.log('Delete model:', model.metadata.model_name);
+                    onClick={async () => {
+                      if (confirm(`Delete model ${model.metadata.model_name}? This cannot be undone.`)) {
+                        try {
+                          // Delete model directory (simple approach for v1)
+                          const response = await fetch(`http://localhost:8000/delete_model`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ model_path: model.model_path })
+                          });
+                          if (response.ok) {
+                            loadModels(); // Refresh list
+                          }
+                        } catch (error) {
+                          alert('Failed to delete model');
+                        }
+                      }
                     }}
                   >
                     <Trash2 className="w-4 h-4" />
@@ -351,9 +388,15 @@ export default function ModelsPage() {
 
                 {/* Actions */}
                 <div className="flex space-x-3 pt-4 border-t">
-                  <Button className="flex-1">
+                  <Button 
+                    className="flex-1"
+                    onClick={() => {
+                      // Navigate to prediction page with this model pre-selected
+                      window.location.href = `/predict?model=${selectedModel.metadata.model_name}`;
+                    }}
+                  >
                     <Target className="w-4 h-4 mr-2" />
-                    Use for Inference
+                    Use for Prediction
                   </Button>
                   <Button variant="outline">
                     <Download className="w-4 h-4 mr-2" />
