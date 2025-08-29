@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Plus, FolderOpen, Upload, BarChart3, Brain, Zap } from 'lucide-react';
@@ -33,17 +33,8 @@ interface Project {
 export default function ProjectPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const [projects, setProjects] = useState<Project[]>([
-    {
-      id: '1',
-      name: 'Sample Project',
-      description: 'A sample project to get you started',
-      createdAt: '2024-01-15',
-      lastModified: '2024-01-15',
-      fileCount: 2,
-      status: 'active'
-    }
-  ]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Redux state
   const isProcessing = useAppSelector(selectIsProcessing);
@@ -75,6 +66,62 @@ export default function ProjectPage() {
     setError(errorMessage);
     console.error('File upload error:', errorMessage);
   }, []);
+
+  // Load projects from API
+  const loadProjects = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('http://localhost:8000/projects');
+      const data = await response.json();
+      
+      if (data.success) {
+        // Convert API format to frontend format
+        const formattedProjects: Project[] = data.projects.map((proj: any) => ({
+          id: proj.id,
+          name: proj.name,
+          description: proj.description,
+          createdAt: new Date(proj.created_at * 1000).toISOString().split('T')[0],
+          lastModified: new Date(proj.updated_at * 1000).toISOString().split('T')[0],
+          fileCount: proj.files?.length || 0,
+          status: proj.status as 'active' | 'archived'
+        }));
+        setProjects(formattedProjects);
+      }
+    } catch (error) {
+      console.error('Failed to load projects:', error);
+      setError('Failed to load projects');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Load projects on mount
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
+
+  // Create new project
+  const createProject = useCallback(async (name: string, description: string) => {
+    try {
+      const response = await fetch('http://localhost:8000/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description })
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        loadProjects(); // Refresh list
+        return data.project;
+      } else {
+        throw new Error(data.error || 'Failed to create project');
+      }
+    } catch (error) {
+      console.error('Failed to create project:', error);
+      setError(error instanceof Error ? error.message : 'Failed to create project');
+      throw error;
+    }
+  }, [loadProjects]);
 
   const handleValidationFailed = useCallback((errors: string[]) => {
     setError(errors[0] || 'File validation failed');
@@ -223,7 +270,18 @@ export default function ProjectPage() {
           </div>
           
           <div className="space-y-3">
-            {projects.map((project) => (
+            {isLoading ? (
+              <div className="flex items-center justify-center p-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
+                <span className="text-gray-600">Loading projects...</span>
+              </div>
+            ) : projects.length === 0 ? (
+              <div className="text-center p-8 text-gray-500">
+                <FolderOpen className="h-12 w-12 mx-auto text-gray-300 mb-4" />
+                <p>No projects yet. Create your first project to get started.</p>
+              </div>
+            ) : (
+              projects.map((project) => (
               <div
                 key={project.id}
                 className="flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors"
@@ -245,7 +303,8 @@ export default function ProjectPage() {
                   </Button>
                 </div>
               </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 

@@ -10,6 +10,7 @@ import json
 import tempfile
 import subprocess
 import logging
+import time
 from pathlib import Path
 from typing import Dict, Any, List
 import traceback
@@ -436,24 +437,260 @@ async def predict_single(request: PredictionRequest):
             detail={'error': str(e)}
         )
 
-@app.post("/profile", response_model=DataProfileResponse)
+@app.post("/download_model")
+async def download_model(request: dict):
+    """Download a trained model as ZIP file"""
+    try:
+        from fastapi.responses import FileResponse
+        import zipfile
+        
+        model_path = request.get('model_path')
+        if not model_path:
+            raise HTTPException(status_code=400, detail="model_path is required")
+        
+        model_dir = Path(model_path)
+        if not model_dir.exists():
+            raise HTTPException(status_code=404, detail="Model not found")
+        
+        # Create ZIP file
+        zip_path = f"/tmp/{model_dir.name}.zip"
+        with zipfile.ZipFile(zip_path, 'w') as zipf:
+            for file_path in model_dir.rglob('*'):
+                if file_path.is_file():
+                    zipf.write(file_path, file_path.relative_to(model_dir))
+        
+        return FileResponse(zip_path, filename=f"{model_dir.name}.zip")
+        
+    except Exception as e:
+        logger.error(f"Model download failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/delete_model")
+async def delete_model(request: dict):
+    """Delete a trained model and its files"""
+    try:
+        model_path = request.get('model_path')
+        if not model_path:
+            raise HTTPException(status_code=400, detail="model_path is required")
+        
+        model_dir = Path(model_path)
+        if model_dir.exists() and model_dir.is_dir():
+            import shutil
+            shutil.rmtree(model_dir)
+            return {"success": True, "message": f"Model {model_path} deleted successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Model not found")
+            
+    except Exception as e:
+        logger.error(f"Model deletion failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/projects")
+async def create_project(project_data: dict):
+    """Create a new project"""
+    try:
+        project_name = project_data.get('name', '').strip()
+        if not project_name:
+            raise HTTPException(status_code=400, detail="Project name is required")
+        
+        # Create project directory
+        projects_dir = Path("projects")
+        projects_dir.mkdir(exist_ok=True)
+        
+        project_id = project_name.lower().replace(' ', '_').replace('-', '_')
+        project_dir = projects_dir / project_id
+        
+        if project_dir.exists():
+            raise HTTPException(status_code=400, detail="Project already exists")
+            
+        project_dir.mkdir()
+        
+        # Create project metadata
+        metadata = {
+            'id': project_id,
+            'name': project_name,
+            'description': project_data.get('description', ''),
+            'created_at': time.time(),
+            'updated_at': time.time(),
+            'files': [],
+            'models': [],
+            'status': 'active'
+        }
+        
+        metadata_path = project_dir / 'project.json'
+        with open(metadata_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
+            
+        return {"success": True, "project": metadata}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Project creation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/projects")
+async def list_projects():
+    """List all projects"""
+    try:
+        projects_dir = Path("projects")
+        if not projects_dir.exists():
+            return {"success": True, "projects": []}
+            
+        projects = []
+        for project_dir in projects_dir.iterdir():
+            if project_dir.is_dir():
+                metadata_path = project_dir / 'project.json'
+                if metadata_path.exists():
+                    with open(metadata_path, 'r') as f:
+                        metadata = json.load(f)
+                        projects.append(metadata)
+                        
+        # Sort by creation date (newest first)
+        projects.sort(key=lambda x: x.get('created_at', 0), reverse=True)
+        
+        return {"success": True, "projects": projects}
+        
+    except Exception as e:
+        logger.error(f"Project listing failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/projects/{project_id}")
+async def delete_project(project_id: str):
+    """Delete a project"""
+    try:
+        project_dir = Path("projects") / project_id
+        if not project_dir.exists():
+            raise HTTPException(status_code=404, detail="Project not found")
+            
+        import shutil
+        shutil.rmtree(project_dir)
+        
+        return {"success": True, "message": f"Project {project_id} deleted"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Project deletion failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/projects/{project_id}/add_model")
+async def add_model_to_project(project_id: str, request: dict):
+    """Add a trained model to a project"""
+    try:
+        project_dir = Path("projects") / project_id
+        metadata_path = project_dir / 'project.json'
+        
+        if not metadata_path.exists():
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Read existing metadata
+        with open(metadata_path, 'r') as f:
+            metadata = json.load(f)
+        
+        model_path = request.get('model_path')
+        model_name = request.get('model_name', model_path)
+        
+        # Add model to project
+        if 'models' not in metadata:
+            metadata['models'] = []
+            
+        model_entry = {
+            'name': model_name,
+            'path': model_path,
+            'added_at': time.time()
+        }
+        metadata['models'].append(model_entry)
+        metadata['updated_at'] = time.time()
+        
+        # Save updated metadata
+        with open(metadata_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
+        
+        return {"success": True, "message": "Model added to project"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Add model to project failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/profile_simple")
+async def profile_simple(csv_file: UploadFile = File(...)):
+    """Simple CSV profiling for v1"""
+    try:
+        logger.info("Received simple profiling request")
+        
+        csv_content = await csv_file.read()
+        csv_str = csv_content.decode('utf-8')
+        
+        from io import StringIO
+        df = pd.read_csv(StringIO(csv_str))
+        
+        # Basic profile
+        columns = []
+        for col in df.columns:
+            col_info = {
+                'name': col,
+                'dtype': str(df[col].dtype),
+                'non_null_count': int(df[col].count()),
+                'null_count': int(df[col].isnull().sum()),
+                'unique_count': int(df[col].nunique()),
+                'data_type': 'numeric' if pd.api.types.is_numeric_dtype(df[col]) else 'categorical'
+            }
+            
+            if col_info['data_type'] == 'numeric':
+                col_info.update({
+                    'mean': float(df[col].mean()) if not pd.isna(df[col].mean()) else 0,
+                    'std': float(df[col].std()) if not pd.isna(df[col].std()) else 0,
+                    'min': float(df[col].min()) if not pd.isna(df[col].min()) else 0,
+                    'max': float(df[col].max()) if not pd.isna(df[col].max()) else 0
+                })
+            
+            columns.append(col_info)
+        
+        return {
+            'success': True,
+            'basic_info': {
+                'rows': int(len(df)),
+                'columns': int(len(df.columns))
+            },
+            'columns': columns,
+            'warnings': []
+        }
+        
+    except Exception as e:
+        logger.error(f"Simple profiling failed: {e}")
+        return {'success': False, 'error': str(e), 'columns': []}
+
+@app.post("/profile")
 async def profile_data(csv_file: UploadFile = File(...)):
     """
-    Profile CSV data using the Analysis/core/profiler.py
+    Profile CSV data - simplified version for v1
     """
     try:
         logger.info("Received data profiling request")
         
         # Read CSV content
         csv_content = await csv_file.read()
-        csv_text = csv_content.decode('utf-8')
+        csv_str = csv_content.decode('utf-8')
         
-        # Create temporary CSV file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as temp_csv:
-            temp_csv.write(csv_text)
-            temp_csv_path = temp_csv.name
+        # Simple pandas-based profiling
+        from io import StringIO
         
-        logger.info(f"Created temporary CSV file for profiling: {temp_csv_path}")
+        df = pd.read_csv(StringIO(csv_str))
+        
+        # Basic profile info
+        profile = {
+            'success': True,
+            'basic_info': {
+                'rows': int(len(df)),
+                'columns': int(len(df.columns)),
+                'memory_usage_mb': float(df.memory_usage(deep=True).sum() / (1024 * 1024))
+            },
+            'columns': [],
+            'warnings': []
+        }
         
         try:
             # Import and use the Analysis profiler
