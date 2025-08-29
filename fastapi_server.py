@@ -70,6 +70,11 @@ class PredictionResponse(BaseModel):
     prediction: float = None
     error: str = None
 
+class DataProfileResponse(BaseModel):
+    success: bool
+    profile: Dict[str, Any] = None
+    error: str = None
+
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint"""
@@ -408,6 +413,100 @@ async def predict_single(request: PredictionRequest):
             detail={'error': str(e)}
         )
 
+@app.post("/profile", response_model=DataProfileResponse)
+async def profile_data(csv_file: UploadFile = File(...)):
+    """
+    Profile CSV data using the Analysis/core/profiler.py
+    """
+    try:
+        logger.info("Received data profiling request")
+        
+        # Read CSV content
+        csv_content = await csv_file.read()
+        csv_text = csv_content.decode('utf-8')
+        
+        # Create temporary CSV file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as temp_csv:
+            temp_csv.write(csv_text)
+            temp_csv_path = temp_csv.name
+        
+        logger.info(f"Created temporary CSV file for profiling: {temp_csv_path}")
+        
+        try:
+            # Import and use the Analysis profiler
+            analysis_path = str(project_root / 'Analysis')
+            if analysis_path not in sys.path:
+                sys.path.insert(0, analysis_path)
+            
+            # Clear any cached imports to ensure fresh import
+            import importlib
+            if 'Analysis.core.profiler' in sys.modules:
+                importlib.reload(sys.modules['Analysis.core.profiler'])
+            if 'Analysis.utils.data_structures' in sys.modules:
+                importlib.reload(sys.modules['Analysis.utils.data_structures'])
+                
+            from Analysis.core.profiler import DataProfiler
+            
+            # Profile the data
+            profiler = DataProfiler()
+            profile = profiler.profile_csv(temp_csv_path)
+            
+            # Convert profile to dictionary for JSON response
+            profile_dict = {
+                'file_path': profile.file_path,
+                'shape': profile.shape,
+                'memory_usage_mb': profile.memory_usage_mb,
+                'columns': [
+                    {
+                        'name': col.name,
+                        'dtype': col.dtype,
+                        'missing_count': col.missing_count,
+                        'missing_percentage': col.missing_percentage,
+                        'unique_count': col.unique_count,
+                        'unique_percentage': col.unique_percentage,
+                        'memory_usage': col.memory_usage,
+                        'stats': col.stats,
+                        'warnings': col.warnings
+                    }
+                    for col in profile.columns
+                ],
+                'missing_summary': profile.missing_summary,
+                'dtypes_summary': profile.dtypes_summary,
+                'warnings': profile.warnings
+            }
+            
+            # Generate visualization data
+            viz_data = profiler.generate_visualization_data(profile)
+            profile_dict['visualization_data'] = viz_data
+            
+            # Generate recommendations
+            recommendations = profiler.get_column_recommendations(profile)
+            profile_dict['recommendations'] = recommendations
+            
+            # Clean up temporary file
+            os.unlink(temp_csv_path)
+            
+            logger.info(f"Data profiling completed: {profile.shape[0]} rows, {profile.shape[1]} columns")
+            return DataProfileResponse(
+                success=True,
+                profile=profile_dict
+            )
+            
+        except Exception as e:
+            # Clean up temporary file on error
+            if os.path.exists(temp_csv_path):
+                os.unlink(temp_csv_path)
+            raise e
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Data profiling request failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={'error': str(e)}
+        )
+
 def check_dependencies():
     """Check if required Python packages are installed"""
     required_packages = ['fastapi', 'uvicorn', 'python-multipart', 'pandas', 'numpy', 'scikit-learn']
@@ -469,6 +568,7 @@ if __name__ == "__main__":
     print("  - GET  /models")
     print("  - POST /predict")
     print("  - POST /predict_single")
+    print("  - POST /profile")
     
     uvicorn.run(
         "fastapi_server:app",
