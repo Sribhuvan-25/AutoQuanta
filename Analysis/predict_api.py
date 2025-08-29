@@ -278,7 +278,12 @@ def predict_with_model(model_path: str, csv_data: str, use_onnx: bool = True) ->
                 try:
                     logger.info("Using pickle model for prediction")
                     with open(pickle_path, 'rb') as f:
-                        model = pickle.load(f)
+                        model_data = pickle.load(f)
+                    # Handle both dict format (new) and direct model format (old)
+                    if isinstance(model_data, dict):
+                        model = model_data['model']
+                    else:
+                        model = model_data
                     predictions = model.predict(X)
                     prediction_method = "pickle"
                 except Exception as pickle_error:
@@ -393,7 +398,12 @@ def predict_single_values(model_path: str, values: List[float]) -> Dict[str, Any
             pickle_path = model_dir / "best_model.pkl"
             if pickle_path.exists():
                 with open(pickle_path, 'rb') as f:
-                    model = pickle.load(f)
+                    model_data = pickle.load(f)
+                # Handle both dict format (new) and direct model format (old)
+                if isinstance(model_data, dict):
+                    model = model_data['model']
+                else:
+                    model = model_data
                 predictions = model.predict(X)
                 prediction_method = "pickle"
             else:

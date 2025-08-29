@@ -161,9 +161,9 @@ def save_trained_model_simple(results, df, target_column: str) -> Dict[str, Any]
         with open(pickle_path, 'wb') as f:
             pickle.dump({
                 'model': results.best_model.model_object,
-                'preprocessor': results.preprocessor,
-                'feature_names': list(df.columns),
-                'target_column': target_column
+                'feature_names': [col for col in df.columns if col != target_column],
+                'target_column': target_column,
+                'model_name': results.best_model.model_name
             }, f)
         
         # Create metadata

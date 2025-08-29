@@ -208,11 +208,42 @@ class AutoPreprocessor:
         columns_to_drop = []
         
         if self.drop_id_columns:
-            # Identify potential ID columns (all unique values)
+            # Identify potential ID columns with more intelligent criteria
             for col in X.columns:
-                if X[col].nunique() == len(X) and X[col].notna().all():
+                # Only consider as ID column if:
+                # 1. All values are unique AND
+                # 2. Dataset has more than 20 rows (avoid dropping features in small datasets) AND
+                # 3. Column name suggests it's an ID (contains 'id', 'key', etc.) OR has string-like IDs
+                is_all_unique = X[col].nunique() == len(X) and X[col].notna().all()
+                is_large_dataset = len(X) > 20
+                
+                # Check if column name suggests it's an ID
+                col_name_lower = str(col).lower()
+                name_suggests_id = any(keyword in col_name_lower for keyword in 
+                                     ['id', 'key', 'uuid', 'guid', 'index', '_id', 'pk'])
+                
+                # Check if values look like IDs (strings with numbers/letters)
+                if is_all_unique and len(X) > 0:
+                    sample_values = X[col].dropna().astype(str).head(5).tolist()
+                    values_look_like_ids = any(
+                        len(str(val)) > 8 or  # Long strings
+                        any(char.isalpha() and char.isdigit() for char in str(val))  # Mixed alphanumeric
+                        for val in sample_values
+                    )
+                else:
+                    values_look_like_ids = False
+                
+                # Only drop if it's clearly an ID column
+                should_drop = is_all_unique and (
+                    (is_large_dataset and (name_suggests_id or values_look_like_ids)) or
+                    (name_suggests_id and values_look_like_ids)  # Very confident it's an ID
+                )
+                
+                if should_drop:
                     columns_to_drop.append(col)
                     logger.info(f"Dropping ID column: {col}")
+                elif is_all_unique and len(X) <= 20:
+                    logger.info(f"Keeping potentially useful column '{col}' (small dataset, all unique values)")
         
         return columns_to_drop
     
