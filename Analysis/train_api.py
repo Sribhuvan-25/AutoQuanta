@@ -147,6 +147,69 @@ def map_frontend_to_python_models(frontend_models):
     
     return python_models
 
+def save_trained_model_simple(results, df, target_column: str) -> Dict[str, Any]:
+    """Save trained model with pickle and metadata (simplified version)."""
+    try:
+        # Create unique model directory
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        model_name = results.best_model.model_name
+        model_dir = Path(f"models/{model_name}_{timestamp}")
+        model_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save model with pickle
+        pickle_path = model_dir / "best_model.pkl"
+        with open(pickle_path, 'wb') as f:
+            pickle.dump({
+                'model': results.best_model.model_object,
+                'feature_names': [col for col in df.columns if col != target_column],
+                'target_column': target_column,
+                'model_name': results.best_model.model_name
+            }, f)
+        
+        # Create metadata
+        try:
+            feature_names = [col for col in df.columns if col != target_column]
+        except Exception:
+            feature_names = []
+            
+        metadata = {
+            'model_name': model_name,
+            'model_type': model_name,
+            'task_type': 'classification' if hasattr(results.best_model.model_object, 'classes_') else 'regression',
+            'target_column': target_column,
+            'best_score': float(results.best_model.mean_score),
+            'export_timestamp': timestamp,
+            'feature_count': len(feature_names),
+            'feature_names': feature_names,
+            'training_data_shape': [len(df), len(df.columns)],
+            'has_onnx': False,
+            'has_pickle': True,
+            'model_path': str(model_dir),
+            'pickle_path': str(pickle_path),
+            'cv_scores': [float(score) for score in results.best_model.cv_scores],
+            'std_score': float(results.best_model.std_score),
+            'training_time': float(results.best_model.training_time)
+        }
+        
+        # Save metadata
+        metadata_path = model_dir / "metadata.json"
+        with open(metadata_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
+        
+        return {
+            'success': True,
+            'model_path': str(model_dir),
+            'pickle_path': str(pickle_path),
+            'metadata_path': str(metadata_path),
+            'metadata': metadata
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
 def export_trained_model(results, df, target_column: str) -> Dict[str, Any]:
     """Export the trained model to ONNX format with metadata."""
     try:
@@ -322,19 +385,19 @@ def train_from_api(csv_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
         # Serialize results for frontend
         serialized_results = serialize_training_results(results)
         
-        # Stage 5: Model Export
+        # Stage 5: Model Export - Always save pickle model and metadata
         export_result = None
         try:
-            emit_progress("exporting", 95, "Exporting model to ONNX format...")
-            export_result = export_trained_model(results, df, target_column)
+            emit_progress("exporting", 95, "Saving trained model...")
+            export_result = save_trained_model_simple(results, df, target_column)
             if export_result['success']:
-                logger.info(f"Model exported successfully to: {export_result['model_path']}")
+                logger.info(f"Model saved successfully to: {export_result['model_path']}")
                 # Add export info to serialized results
                 serialized_results['export_info'] = export_result
             else:
-                logger.warning(f"Model export failed: {export_result.get('error', 'Unknown error')}")
+                logger.warning(f"Model save failed: {export_result.get('error', 'Unknown error')}")
         except Exception as e:
-            logger.warning(f"Model export failed: {e}")
+            logger.warning(f"Model save failed: {e}")
             export_result = {'success': False, 'error': str(e)}
         
         # Stage 6: Complete

@@ -145,15 +145,38 @@ async def train_model(
             
             if result.returncode == 0:
                 # Parse the JSON output from train_api.py
+                # Filter out PROGRESS messages and extract the final JSON result
                 try:
-                    training_result = json.loads(result.stdout)
+                    lines = result.stdout.strip().split('\n')
+                    json_lines = []
+                    
+                    # Find lines that don't start with PROGRESS:
+                    in_json = False
+                    json_content = []
+                    
+                    for line in lines:
+                        if line.startswith('PROGRESS:'):
+                            continue  # Skip progress messages
+                        elif line.strip().startswith('{'):
+                            in_json = True
+                            json_content.append(line)
+                        elif in_json:
+                            json_content.append(line)
+                    
+                    if not json_content:
+                        raise ValueError("No JSON result found in output")
+                    
+                    # Join the JSON lines and parse
+                    json_str = '\n'.join(json_content)
+                    training_result = json.loads(json_str)
+                    
                     logger.info(f"Training completed successfully: {training_result.get('message', 'No message')}")
                     return TrainingResponse(
                         success=True,
                         message=training_result.get('message'),
                         results=training_result
                     )
-                except json.JSONDecodeError as e:
+                except (json.JSONDecodeError, ValueError) as e:
                     logger.error(f"Failed to parse training result: {e}")
                     logger.error(f"Raw output: {result.stdout}")
                     raise HTTPException(
