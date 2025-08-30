@@ -331,57 +331,17 @@ export default function EDAPage() {
               </div>
             </div>
 
-            {/* Target Selection */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Target Column Selection</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Target Column for Machine Learning
-                  </label>
-                  <select
-                    value={targetColumn || ''}
-                    onChange={(e) => handleTargetSelect(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Choose a target column...</option>
-                    {currentDataset.columns.map((column) => (
-                      <option key={column.name} value={column.name}>
-                        {column.name} ({column.dtype})
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    The target column is what you want to predict. Choose a column with the values you want to model.
-                  </p>
-                </div>
-                
-                {targetColumn && (
-                  <div className="p-3 bg-green-50 border border-green-200 rounded-md">
-                    <div className="flex items-center gap-x-2 text-sm text-green-600">
-                      <CheckCircle className="h-4 w-4" />
-                      <span>Target column selected: <strong>{targetColumn}</strong></span>
-                    </div>
-                    <p className="text-xs text-green-600 mt-1">
-                      Ready to proceed with model training using this target column.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
             {/* Action Buttons */}
             <div className="flex justify-between items-center">
               <div className="text-sm text-gray-500">
-                {targetColumn ? 'Ready for training' : 'Select a target column to continue'}
+                Data analysis complete. Proceed to training to select target column and configure models.
               </div>
               <div className="flex gap-x-3">
                 <Button variant="outline" onClick={handleReset}>
                   Start Over
                 </Button>
                 <Button 
-                  disabled={!targetColumn}
-                  onClick={handleContinueToTraining}
+                  onClick={() => router.push('/train')}
                 >
                   Continue to Training →
                 </Button>

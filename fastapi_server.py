@@ -148,27 +148,44 @@ async def train_model(
                 # Parse the JSON output from train_api.py
                 # Filter out PROGRESS messages and extract the final JSON result
                 try:
-                    lines = result.stdout.strip().split('\n')
-                    json_lines = []
+                    output = result.stdout.strip()
                     
-                    # Find lines that don't start with PROGRESS:
+                    # Split by lines and find where the JSON ends and logging begins
+                    lines = output.split('\n')
+                    
+                    # Find the start and end of the JSON object
+                    json_start = -1
+                    json_end = -1
+                    brace_count = 0
                     in_json = False
-                    json_content = []
                     
-                    for line in lines:
-                        if line.startswith('PROGRESS:'):
-                            continue  # Skip progress messages
-                        elif line.strip().startswith('{'):
+                    for i, line in enumerate(lines):
+                        # Skip PROGRESS and LightGBM messages
+                        if line.startswith('PROGRESS:') or line.startswith('[LightGBM]'):
+                            continue
+                            
+                        # Look for JSON start
+                        if not in_json and line.strip().startswith('{'):
+                            json_start = i
                             in_json = True
-                            json_content.append(line)
+                            brace_count = line.count('{') - line.count('}')
                         elif in_json:
-                            json_content.append(line)
+                            brace_count += line.count('{') - line.count('}')
+                            if brace_count == 0:  # JSON is complete
+                                json_end = i
+                                break
                     
-                    if not json_content:
-                        raise ValueError("No JSON result found in output")
+                    if json_start == -1 or json_end == -1:
+                        raise ValueError("No complete JSON object found in output")
                     
-                    # Join the JSON lines and parse
-                    json_str = '\n'.join(json_content)
+                    # Extract and parse the JSON portion only
+                    json_lines = []
+                    for i in range(json_start, json_end + 1):
+                        line = lines[i]
+                        if not line.startswith('PROGRESS:') and not line.startswith('[LightGBM]'):
+                            json_lines.append(line)
+                    
+                    json_str = '\n'.join(json_lines)
                     training_result = json.loads(json_str)
                     
                     logger.info(f"Training completed successfully: {training_result.get('message', 'No message')}")

@@ -2460,17 +2460,28 @@ export const tauriAPI = {
   async saveTrainedModels(results: any): Promise<void> {
     try {
       const timestamp = new Date().toISOString();
-      const modelRecords = results.all_models.map((model: any) => ({
+      
+      // Handle both direct results and wrapped results formats
+      const trainingResults = results.results || results;
+      const allModels = trainingResults.all_models;
+      const trainingConfig = trainingResults.training_config;
+      
+      if (!allModels || !Array.isArray(allModels)) {
+        console.warn('No all_models array found in training results:', results);
+        return;
+      }
+      
+      const modelRecords = allModels.map((model: any) => ({
         id: `${model.model_name}_${timestamp}`,
         name: model.model_name,
         type: model.model_name,
-        accuracy: results.training_config.task_type === 'regression' 
+        accuracy: trainingConfig?.task_type === 'regression' 
           ? model.comprehensive_metrics?.r2_score || model.mean_score
           : model.comprehensive_metrics?.accuracy || model.mean_score,
         createdAt: timestamp,
         size: `${(Math.random() * 50 + 10).toFixed(1)}MB`,
-        task_type: results.training_config.task_type,
-        target_column: results.training_config.target_column,
+        task_type: trainingConfig?.task_type || 'unknown',
+        target_column: trainingConfig?.target_column || 'unknown',
         comprehensive_metrics: model.comprehensive_metrics,
         training_time: model.training_time,
         cv_scores: model.cv_scores,

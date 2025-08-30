@@ -53,12 +53,6 @@ export default function TrainPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleStartTraining = async (config: TrainingConfigType) => {
-    // Check if project is loaded
-    if (!isProjectLoaded || !currentProject) {
-      dispatch(showCreateWizard());
-      return;
-    }
-
     try {
       setShowResults(false);
       
@@ -68,11 +62,11 @@ export default function TrainPage() {
         filePath: currentDataset.filePath
       } : undefined;
       
-      // Include project information in training request
+      // Include project information in training request if available (optional)
       const result = await dispatch(startTraining({ 
         config, 
         datasetData, 
-        projectConfig: currentProject 
+        projectConfig: currentProject || undefined
       }));
       
       if (startTraining.fulfilled.match(result)) {
@@ -125,16 +119,16 @@ export default function TrainPage() {
           )}
         </div>
 
-        {/* Project Requirement Notice */}
+        {/* Project Recommendation Notice */}
         {!isProjectLoaded && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+                <Folder className="h-5 w-5 text-blue-600 mt-0.5" />
                 <div>
-                  <h3 className="text-sm font-medium text-amber-800">Project Required</h3>
-                  <p className="text-sm text-amber-700 mt-1">
-                    You need to create or select a project before training models. Projects help organize your data, models, and results.
+                  <h3 className="text-sm font-medium text-blue-800">Project Recommended</h3>
+                  <p className="text-sm text-blue-700 mt-1">
+                    Create a project to automatically save your training results and models for future use.
                   </p>
                 </div>
               </div>
@@ -142,7 +136,7 @@ export default function TrainPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => dispatch(showCreateWizard())}
-                className="text-amber-600 border-amber-300"
+                className="text-blue-600 border-blue-300"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Create Project
