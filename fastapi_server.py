@@ -649,6 +649,11 @@ async def profile_simple(csv_file: UploadFile = File(...)):
             
             columns.append(col_info)
         
+        # Convert DataFrame to string[][] format for frontend
+        data_rows = []
+        for _, row in df.iterrows():
+            data_rows.append([str(val) for val in row.values])
+        
         return {
             'success': True,
             'basic_info': {
@@ -656,7 +661,9 @@ async def profile_simple(csv_file: UploadFile = File(...)):
                 'columns': int(len(df.columns))
             },
             'columns': columns,
-            'warnings': []
+            'warnings': [],
+            'data': data_rows,
+            'headers': list(df.columns)
         }
         
     except Exception as e:

@@ -114,12 +114,6 @@ export const profileCSVWithAPI = createAsyncThunk(
         throw new Error(profileData.error || 'Profiling failed');
       }
       
-      dispatch(updateProcessingStage({ stage: 'parsing', progress: 80 }));
-      
-      // Parse CSV content for display
-      const csvText = await file.text();
-      const parsedData = parseCSV(csvText);
-      
       dispatch(updateProcessingStage({ stage: 'completed', progress: 100 }));
       
       // Transform API response to match our interface
@@ -127,16 +121,16 @@ export const profileCSVWithAPI = createAsyncThunk(
         id: `file_${Date.now()}`,
         filePath: file.name,
         fileName: file.name,
-        data: parsedData.rows,
-        headers: parsedData.headers,
-        rows: parsedData.rows,
+        data: profileData.data || [], // Use data from API
+        headers: profileData.headers || [],
+        rows: profileData.data || [],
         profile: profileData.profile || null,
         columns: profileData.columns || [],
         warnings: profileData.warnings || [],
         metadata: {
           fileSize: file.size,
-          rowCount: parsedData.rows.length,
-          columnCount: parsedData.headers.length,
+          rowCount: profileData.basic_info?.rows || 0,
+          columnCount: profileData.basic_info?.columns || 0,
           processedAt: new Date().toISOString(),
           memoryUsage: 0,
         },

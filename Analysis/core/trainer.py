@@ -200,7 +200,12 @@ class ModelTrainer:
             val_predictions = fold_model.predict(X_val)
             val_probabilities = None
             if config.task_type == 'classification' and hasattr(fold_model, 'predict_proba'):
-                val_probabilities = fold_model.predict_proba(X_val)[:, 1]  # Probability of positive class
+                proba_matrix = fold_model.predict_proba(X_val)
+                # Handle both binary and multiclass cases
+                if proba_matrix.shape[1] >= 2:
+                    val_probabilities = proba_matrix[:, 1]  # Probability of positive class
+                else:
+                    val_probabilities = proba_matrix[:, 0]  # Single class case
             
             # Calculate comprehensive metrics
             if config.task_type == 'classification':

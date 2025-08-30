@@ -353,6 +353,22 @@ def train_from_api(csv_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
         if target_column not in df.columns:
             raise ValueError(f"Target column '{target_column}' not found in data. Available columns: {list(df.columns)}")
         
+        # Validate and potentially correct task type
+        original_task_type = config.get('task_type', 'classification')
+        target_series = df[target_column]
+        
+        # Check if the target looks like continuous data (many unique values relative to dataset size)
+        unique_ratio = target_series.nunique() / len(target_series)
+        is_numeric = pd.api.types.is_numeric_dtype(target_series)
+        
+        if original_task_type == 'classification' and is_numeric and unique_ratio > 0.1:
+            logger.warning(f"Target column '{target_column}' has {target_series.nunique()} unique values ({unique_ratio:.1%} of data)")
+            logger.warning(f"This looks like continuous data. Switching from classification to regression.")
+            config['task_type'] = 'regression'
+        elif original_task_type == 'regression' and not is_numeric:
+            logger.warning(f"Target column '{target_column}' is not numeric. Switching from regression to classification.")
+            config['task_type'] = 'classification'
+        
         # Map frontend model names to Python model names
         python_models = map_frontend_to_python_models(config.get('models_to_try', ['random_forest']))
         
