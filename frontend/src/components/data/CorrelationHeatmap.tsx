@@ -148,13 +148,15 @@ export function CorrelationHeatmap({ data, className }: CorrelationHeatmapProps)
               <tr>
                 <th className="w-24"></th>
                 {columns.map((col, index) => (
-                  <th key={index} className="p-1 text-xs font-medium text-gray-700">
+                  <th key={index} className="p-2 text-xs font-medium text-gray-700">
                     <div 
-                      className="w-24 truncate transform -rotate-45 origin-bottom-left"
+                      className="w-20 text-center transform -rotate-45 origin-center"
                       title={col}
-                      style={{ height: '60px', lineHeight: '60px' }}
+                      style={{ height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     >
-                      {col.length > 15 ? `${col.substring(0, 12)}...` : col}
+                      <span className="whitespace-nowrap">
+                        {col.length > 8 ? `${col.substring(0, 6)}...` : col}
+                      </span>
                     </div>
                   </th>
                 ))}
@@ -163,12 +165,12 @@ export function CorrelationHeatmap({ data, className }: CorrelationHeatmapProps)
             <tbody>
               {columns.map((rowCol, rowIndex) => (
                 <tr key={rowIndex}>
-                  <td className="p-1 text-xs font-medium text-gray-700 text-right pr-2">
+                  <td className="p-2 text-xs font-medium text-gray-700 text-right">
                     <div 
-                      className="w-24 truncate"
+                      className="w-20 truncate"
                       title={rowCol}
                     >
-                      {rowCol.length > 15 ? `${rowCol.substring(0, 12)}...` : rowCol}
+                      {rowCol.length > 8 ? `${rowCol.substring(0, 6)}...` : rowCol}
                     </div>
                   </td>
                   {columns.map((colCol, colIndex) => {

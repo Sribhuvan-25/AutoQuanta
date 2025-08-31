@@ -92,8 +92,8 @@ export function ColumnDistribution({ column, data, className }: ColumnDistributi
   const isNumeric = column.dtype === 'int64' || column.dtype === 'float64';
 
   return (
-    <div className={cn('w-full h-64', className)}>
-      <div className="mb-3">
+    <div className={cn('w-full h-72', className)}>
+      <div className="mb-2">
         <h4 className="text-sm font-medium text-gray-900 mb-1 truncate" title={column.name}>
           {column.name} Distribution
         </h4>
@@ -104,16 +104,17 @@ export function ColumnDistribution({ column, data, className }: ColumnDistributi
       
       <ResponsiveContainer width="100%" height="100%">
         {isNumeric ? (
-          <BarChart data={distributionData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+          <BarChart data={distributionData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
             <XAxis 
               dataKey="name" 
-              tick={{ fontSize: 10 }}
+              tick={{ fontSize: 9 }}
               angle={-45}
               textAnchor="end"
-              height={60}
+              height={50}
+              interval={0}
             />
-            <YAxis tick={{ fontSize: 10 }} />
+            <YAxis tick={{ fontSize: 9 }} width={40} />
             <Tooltip 
               content={({ active, payload, label }) => {
                 if (active && payload && payload.length) {

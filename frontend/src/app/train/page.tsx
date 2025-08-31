@@ -59,6 +59,7 @@ export default function TrainPage() {
       // Prepare dataset data if available
       const datasetData = currentDataset ? {
         data: currentDataset.data,
+        headers: currentDataset.headers,
         filePath: currentDataset.filePath
       } : undefined;
       

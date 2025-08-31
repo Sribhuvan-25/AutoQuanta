@@ -1301,11 +1301,24 @@ export const tauriAPI = {
       (globalThis as { lastTrainingConfig?: TrainingConfig }).lastTrainingConfig = config;
       (globalThis as { currentDataset?: { data: string[][]; filePath: string } }).currentDataset = datasetData;
       
+      // Initialize training state
+      (globalThis as { trainingState?: any }).trainingState = {
+        status: 'training',
+        progress: 10,
+        currentStage: 'preparing',
+        startTime: Date.now()
+      };
+      
       // Try Python integration with multiple fallback methods
       try {
         console.log('[Python] Attempting Python integration...');
         const PythonIntegration = (await import('./python-integration')).default;
-        const result = await PythonIntegration.executeTraining(this.dataArrayToCsv(datasetData.data), config);
+        // Combine headers with data for CSV conversion
+        const fullDataWithHeaders = [
+          datasetData.headers || [], // Headers as first row
+          ...datasetData.data        // Data rows
+        ];
+        const result = await PythonIntegration.executeTraining(this.dataArrayToCsv(fullDataWithHeaders), config);
         
         if (result.success && result.results) {
           // Store the REAL results from Python
@@ -1313,6 +1326,13 @@ export const tauriAPI = {
           console.log('[Python] Training completed successfully via:', result.method);
           console.log('[Python] Best model:', result.results.best_model?.model_name);
           console.log('[Python] Best score:', result.results.best_model?.mean_score);
+          
+          // Update training state to mark as completed
+          const trainingState = (globalThis as { trainingState?: any }).trainingState || {};
+          trainingState.status = 'completed';
+          trainingState.progress = 100;
+          trainingState.currentStage = 'completed';
+          (globalThis as { trainingState?: any }).trainingState = trainingState;
           
           // Save models to localStorage
           await this.saveTrainedModels(result.results);
@@ -1343,7 +1363,11 @@ export const tauriAPI = {
     // Don't start simulated progress - we'll get real progress from Python
     
     // Create a temporary CSV file from the data
-    const csvContent = this.dataArrayToCsv(datasetData.data);
+    const fullDataWithHeaders = [
+      datasetData.headers || [], // Headers as first row
+      ...datasetData.data        // Data rows
+    ];
+    const csvContent = this.dataArrayToCsv(fullDataWithHeaders);
     
     // In a real implementation, this would:
     // 1. Write CSV data to temp file

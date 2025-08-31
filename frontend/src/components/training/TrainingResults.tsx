@@ -135,25 +135,29 @@ export function TrainingResults({
                       <Trophy className="h-5 w-5 text-yellow-500" />
                       <h4 className="text-lg font-semibold text-gray-900">Best Model</h4>
                     </div>
-                    <p className="text-2xl font-bold text-green-600">{bestModel.model_name}</p>
-                    {results.training_config.task_type === 'regression' && bestModel.comprehensive_metrics ? (
+                    <p className="text-2xl font-bold text-green-600">{bestModel?.model_name || 'Unknown'}</p>
+                    {results.training_config.task_type === 'regression' && bestModel?.comprehensive_metrics ? (
                       <div className="text-sm text-gray-600 mt-1 space-y-1">
                         <p>R² Score: <span className="font-medium text-blue-600">{bestModel.comprehensive_metrics.r2_score?.toFixed(4)}</span></p>
                         <p>MSE: <span className="font-medium text-orange-600">{bestModel.comprehensive_metrics.mse?.toFixed(6)}</span></p>
                       </div>
-                    ) : (
+                    ) : bestModel ? (
                       <div className="text-sm text-gray-600 mt-1 space-y-1">
                         <p>Accuracy: <span className="font-medium text-blue-600">{formatScore(bestModel.mean_score)}</span></p>
                         {bestModel.comprehensive_metrics?.f1_score && (
                           <p>F1 Score: <span className="font-medium text-green-600">{(bestModel.comprehensive_metrics.f1_score * 100).toFixed(1)}%</span></p>
                         )}
                       </div>
+                    ) : (
+                      <div className="text-sm text-gray-600 mt-1">
+                        <p>No performance data available</p>
+                      </div>
                     )}
                   </div>
                   <div className="text-right space-y-2">
                     <div className="bg-white px-3 py-2 rounded-lg">
                       <p className="text-xs text-gray-600">Training Time</p>
-                      <p className="font-medium">{formatTime(bestModel.training_time)}</p>
+                      <p className="font-medium">{bestModel ? formatTime(bestModel.training_time) : 'N/A'}</p>
                     </div>
                   </div>
                 </div>
