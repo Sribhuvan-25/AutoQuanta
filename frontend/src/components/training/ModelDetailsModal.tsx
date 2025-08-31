@@ -43,6 +43,33 @@ export function ModelDetailsModal({ isOpen, onClose, model, trainingResults }: M
     return nameMap[modelName] || modelName.toUpperCase();
   };
 
+  const getPrimaryMetricName = (): string => {
+    if (trainingResults.training_config.task_type === 'regression') {
+      // For regression, we typically use R² as the primary metric, but if it's not available, use MSE
+      if (model.comprehensive_metrics?.r2_score !== undefined) {
+        return 'R² Score';
+      }
+      return 'Mean Score'; // Fallback
+    } else {
+      // For classification, use accuracy as primary metric
+      return 'Accuracy';
+    }
+  };
+
+  const getPrimaryMetricValue = (): string => {
+    if (trainingResults.training_config.task_type === 'regression') {
+      if (model.comprehensive_metrics?.r2_score !== undefined) {
+        return model.comprehensive_metrics.r2_score.toFixed(4);
+      }
+      return formatScore(model.mean_score);
+    } else {
+      if (model.comprehensive_metrics?.accuracy !== undefined) {
+        return (model.comprehensive_metrics.accuracy * 100).toFixed(1) + '%';
+      }
+      return formatScore(model.mean_score);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -74,16 +101,21 @@ export function ModelDetailsModal({ isOpen, onClose, model, trainingResults }: M
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-gray-50 p-4 rounded-lg text-center">
-                <p className="text-sm text-gray-600">Mean Score</p>
-                <p className="text-2xl font-bold text-blue-600">{formatScore(model.mean_score)}</p>
+                <p className="text-sm text-gray-600">{getPrimaryMetricName()}</p>
+                <p className="text-2xl font-bold text-blue-600">{getPrimaryMetricValue()}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {trainingResults.training_config.task_type === 'regression' ? 'R²' : 'Accuracy'}: {formatScore(model.mean_score)} ± {formatScore(model.std_score)}
+                </p>
               </div>
               <div className="bg-gray-50 p-4 rounded-lg text-center">
                 <p className="text-sm text-gray-600">Standard Deviation</p>
                 <p className="text-2xl font-bold text-orange-600">{formatScore(model.std_score)}</p>
+                <p className="text-xs text-gray-500 mt-1">Cross-validation variability</p>
               </div>
               <div className="bg-gray-50 p-4 rounded-lg text-center">
                 <p className="text-sm text-gray-600">Training Time</p>
                 <p className="text-2xl font-bold text-green-600">{formatTime(model.training_time)}</p>
+                <p className="text-xs text-gray-500 mt-1">{model.cv_scores?.length || 0} folds</p>
               </div>
             </div>
           </div>
@@ -177,23 +209,30 @@ export function ModelDetailsModal({ isOpen, onClose, model, trainingResults }: M
                 Feature Importance (Top 10)
               </h3>
               <div className="space-y-2">
-                {Object.entries(model.feature_importance)
-                  .sort(([, a], [, b]) => b - a)
-                  .slice(0, 10)
-                  .map(([feature, importance], idx) => (
+                {(() => {
+                  const sortedFeatures = Object.entries(model.feature_importance)
+                    .sort(([, a], [, b]) => b - a)
+                    .slice(0, 10);
+                  const maxImportance = Math.max(...sortedFeatures.map(([, imp]) => imp));
+                  
+                  return sortedFeatures.map(([feature, importance], idx) => (
                     <div key={feature} className="flex items-center justify-between">
-                      <span className="text-sm text-gray-700 truncate flex-1 mr-2">{feature}</span>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-sm text-gray-700 truncate flex-1 mr-2" title={feature}>{feature}</span>
+                      <div className="flex items-center gap-2 flex-shrink-0 w-40">
                         <div className="w-24 bg-gray-200 rounded-full h-2">
                           <div
                             className="bg-blue-500 h-2 rounded-full"
-                            style={{ width: `${(importance * 100)}%` }}
+                            style={{ 
+                              width: `${Math.min(100, (importance / maxImportance) * 100)}%`,
+                              transition: 'width 0.3s ease'
+                            }}
                           />
                         </div>
-                        <span className="text-sm font-mono w-12 text-right">{importance.toFixed(3)}</span>
+                        <span className="text-sm font-mono w-12 text-right">{(importance * 100).toFixed(0)}</span>
                       </div>
                     </div>
-                  ))}
+                  ));
+                })()}
               </div>
             </div>
           )}
