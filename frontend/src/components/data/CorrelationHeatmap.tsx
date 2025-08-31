@@ -141,21 +141,21 @@ export function CorrelationHeatmap({ data, className }: CorrelationHeatmapProps)
         </p>
       </div>
       
-      <div className="overflow-auto">
+      <div className="overflow-auto max-h-96 border border-gray-200 rounded-lg">
         <div className="inline-block min-w-full">
           <table className="border-collapse">
-            <thead>
+            <thead className="sticky top-0 bg-white z-10">
               <tr>
-                <th className="w-24"></th>
+                <th className="w-24 bg-white sticky left-0 z-20"></th>
                 {columns.map((col, index) => (
-                  <th key={index} className="p-2 text-xs font-medium text-gray-700">
+                  <th key={index} className="p-1 text-xs font-medium text-gray-700 bg-white">
                     <div 
-                      className="w-20 text-center transform -rotate-45 origin-center"
+                      className="w-24 text-center transform -rotate-45 origin-center"
                       title={col}
-                      style={{ height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      style={{ height: '80px', display: 'flex', alignItems: 'end', justifyContent: 'center', paddingBottom: '8px' }}
                     >
-                      <span className="whitespace-nowrap">
-                        {col.length > 8 ? `${col.substring(0, 6)}...` : col}
+                      <span className="whitespace-nowrap text-xs">
+                        {col.length > 12 ? `${col.substring(0, 10)}...` : col}
                       </span>
                     </div>
                   </th>
@@ -165,12 +165,12 @@ export function CorrelationHeatmap({ data, className }: CorrelationHeatmapProps)
             <tbody>
               {columns.map((rowCol, rowIndex) => (
                 <tr key={rowIndex}>
-                  <td className="p-2 text-xs font-medium text-gray-700 text-right">
+                  <td className="p-2 text-xs font-medium text-gray-700 text-right bg-white sticky left-0 border-r border-gray-200 z-10">
                     <div 
                       className="w-20 truncate"
                       title={rowCol}
                     >
-                      {rowCol.length > 8 ? `${rowCol.substring(0, 6)}...` : rowCol}
+                      {rowCol.length > 12 ? `${rowCol.substring(0, 10)}...` : rowCol}
                     </div>
                   </td>
                   {columns.map((colCol, colIndex) => {
