@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
-import { X, Trophy, Clock, BarChart3, TrendingUp } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Trophy, Clock, BarChart3, TrendingUp, Download, FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { tauriAPI } from '@/lib/tauri';
 import type { ModelPerformance, TrainingResults } from '@/lib/types';
 
 interface ModelDetailsModalProps {
@@ -14,7 +15,81 @@ interface ModelDetailsModalProps {
 }
 
 export function ModelDetailsModal({ isOpen, onClose, model, trainingResults }: ModelDetailsModalProps) {
+  const [selectedDirectory, setSelectedDirectory] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportStatus, setExportStatus] = useState<{ success?: boolean; message?: string } | null>(null);
+
+  // Auto-set project directory when modal opens
+  useEffect(() => {
+    if (isOpen && !selectedDirectory) {
+      const projectDirectory = localStorage.getItem('currentProjectDirectory');
+      if (projectDirectory) {
+        setSelectedDirectory(projectDirectory);
+      }
+    }
+  }, [isOpen, selectedDirectory]);
+
   if (!isOpen || !model || !trainingResults) return null;
+
+  const handleSelectDirectory = async () => {
+    // Check if we have a current project directory
+    const projectDirectory = localStorage.getItem('currentProjectDirectory');
+    if (projectDirectory) {
+      setSelectedDirectory(projectDirectory);
+      setExportStatus(null);
+      return;
+    }
+
+    // Fallback to directory picker if no project directory is set
+    try {
+      const directory = await tauriAPI.selectDirectory();
+      if (directory) {
+        setSelectedDirectory(directory);
+        setExportStatus(null);
+      }
+    } catch (error) {
+      console.error('Failed to select directory:', error);
+      setExportStatus({ success: false, message: 'Failed to open directory picker' });
+    }
+  };
+
+  const handleExportModel = async () => {
+    if (!selectedDirectory) {
+      setExportStatus({ success: false, message: 'Please select a directory first' });
+      return;
+    }
+
+    setIsExporting(true);
+    setExportStatus(null);
+
+    try {
+      const result = await tauriAPI.exportModelToDirectory(
+        model, 
+        selectedDirectory, 
+        model.model_name
+      );
+
+      if (result.success) {
+        setExportStatus({ 
+          success: true, 
+          message: `Model exported successfully to: ${result.path}` 
+        });
+      } else {
+        setExportStatus({ 
+          success: false, 
+          message: result.error || 'Export failed' 
+        });
+      }
+    } catch (error) {
+      console.error('Export failed:', error);
+      setExportStatus({ 
+        success: false, 
+        message: `Export failed: ${error}` 
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const formatScore = (score: number): string => {
     if (trainingResults.training_config.task_type === 'regression') {
@@ -213,14 +288,79 @@ export function ModelDetailsModal({ isOpen, onClose, model, trainingResults }: M
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex justify-end gap-3 p-6 border-t bg-gray-50">
-          <Button variant="outline" onClick={onClose}>
-            Close
-          </Button>
-          <Button>
-            Export Model Details
-          </Button>
+        {/* Export Section */}
+        <div className="p-6 border-t bg-gray-50">
+          {/* Directory Selection */}
+          <div className="mb-4">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">
+              Export Location
+            </label>
+            <div className="space-y-2">
+              {selectedDirectory ? (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center gap-2 mb-1">
+                    <FolderOpen className="h-4 w-4 text-green-600" />
+                    <span className="text-sm font-medium text-green-800">
+                      {localStorage.getItem('currentProjectDirectory') === selectedDirectory 
+                        ? 'Project Directory' 
+                        : 'Custom Directory'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-green-700 break-all">{selectedDirectory}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSelectDirectory}
+                    className="mt-2 text-xs"
+                  >
+                    Change Directory
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2 items-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSelectDirectory}
+                    className="flex items-center gap-2"
+                  >
+                    <FolderOpen className="h-4 w-4" />
+                    Choose Directory
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Export Status */}
+          {exportStatus && (
+            <div className={cn(
+              "mb-4 p-3 rounded-lg text-sm",
+              exportStatus.success 
+                ? "bg-green-100 text-green-800 border border-green-200" 
+                : "bg-red-100 text-red-800 border border-red-200"
+            )}>
+              {exportStatus.message}
+            </div>
+          )}
+
+          {/* Footer Buttons */}
+          <div className="flex justify-between items-center">
+            <Button variant="outline" onClick={onClose}>
+              Close
+            </Button>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={handleExportModel}
+                disabled={!selectedDirectory || isExporting}
+                className="flex items-center gap-2"
+              >
+                <Download className="h-4 w-4" />
+                {isExporting ? 'Exporting...' : 'Export Model'}
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
