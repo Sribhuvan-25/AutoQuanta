@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Menu, Settings, HelpCircle, Folder, FolderOpen, Plus, ChevronDown, Calendar, User } from 'lucide-react';
+import { Menu, Settings, Folder, FolderOpen, Plus, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ProjectCreationWizard } from '@/components/project/ProjectCreationWizard';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
@@ -181,45 +181,24 @@ export function Header({ onMenuClick }: HeaderProps) {
                   )}
                 </div>
 
-                {/* Current project info */}
-                {currentProject && (
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <Calendar className="h-3 w-3" />
-                    <span>Modified {new Date(currentProject.metadata.lastModified).toLocaleDateString()}</span>
-                    {currentProject.metadata.author && (
-                      <>
-                        <span className="text-gray-300">•</span>
-                        <User className="h-3 w-3" />
-                        <span>{currentProject.metadata.author}</span>
-                      </>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           </div>
 
           {/* Right side actions */}
-          <div className="flex items-center gap-x-4 lg:gap-x-6">
-            {/* Quick actions for project */}
+          <div className="flex items-center gap-x-2">
+            {/* Current project indicator (simplified) */}
             {currentProject && (
-              <div className="flex items-center gap-2">
-                <div className="text-xs text-gray-500">
-                  {formatProjectPath(currentProject.metadata.projectPath)}
-                </div>
+              <div className="flex items-center gap-2 px-2 py-1 bg-green-50 rounded-md">
+                <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+                <span className="text-xs font-medium text-green-700">Project Active</span>
               </div>
             )}
 
-            {/* Help button */}
-            <Button variant="ghost" size="sm" className="-m-2.5 p-2.5 text-gray-400 hover:text-gray-500">
-              <span className="sr-only">View help</span>
-              <HelpCircle className="h-6 w-6" aria-hidden="true" />
-            </Button>
-
             {/* Settings button */}
             <Button variant="ghost" size="sm" className="-m-2.5 p-2.5 text-gray-400 hover:text-gray-500">
-              <span className="sr-only">Open settings</span>
-              <Settings className="h-6 w-6" aria-hidden="true" />
+              <span className="sr-only">Settings</span>
+              <Settings className="h-5 w-5" aria-hidden="true" />
             </Button>
           </div>
         </div>

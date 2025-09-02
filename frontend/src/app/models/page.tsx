@@ -15,7 +15,8 @@ import {
   Eye,
   FileText,
   Database,
-  Zap
+  Zap,
+  RefreshCw
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -131,12 +132,21 @@ export default function ModelsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading saved models...</p>
+      <AppLayout>
+        <div className="space-y-8">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Model Management</h1>
+            <p className="text-gray-600 mt-1">Manage and deploy your trained machine learning models</p>
+          </div>
+          
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="flex items-center justify-center py-8">
+              <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
+              <span className="text-gray-600">Loading saved models...</span>
+            </div>
+          </div>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 

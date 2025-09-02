@@ -1132,6 +1132,175 @@ export const tauriAPI = {
     }
   },
 
+  async selectDirectory(): Promise<string | null> {
+    await loadTauriAPI();
+    
+    if (isTauri && invoke) {
+      try {
+        return await invoke('select_directory') as string | null;
+      } catch (error) {
+        console.error('Error selecting directory:', error);
+        return null;
+      }
+    } else {
+      console.log('[Local] Opening directory picker...');
+      
+      // Use File System Access API if available
+      if ('showDirectoryPicker' in window) {
+        try {
+          const dirHandle = await (window as any).showDirectoryPicker({
+            id: 'model-export',
+            startIn: 'documents',
+            mode: 'readwrite'
+          });
+          
+          if (dirHandle) {
+            console.log('[FS] Selected directory:', dirHandle.name);
+            
+            // Store the directory handle for later use
+            (globalThis as any).selectedDirectoryHandle = dirHandle;
+            
+            // Return a path that indicates browser directory selection
+            return `/browser_selected_dir/${dirHandle.name}`;
+          }
+          
+          return null;
+        } catch (error) {
+          if ((error as Error).name !== 'AbortError') {
+            console.error('[FS] Directory selection failed:', error);
+          }
+          return null;
+        }
+      } else {
+        // Fallback - show message that directory selection requires modern browser
+        console.warn('[Local] Directory selection requires a modern browser with File System Access API');
+        alert('Directory selection requires a modern browser with File System Access API support (Chrome 86+, Edge 86+, Safari 15.2+)');
+        return null;
+      }
+    }
+  },
+
+  async exportModelToDirectory(modelData: any, directoryPath: string, modelName: string): Promise<{ success: boolean; path?: string; error?: string }> {
+    await loadTauriAPI();
+    
+    if (isTauri && invoke) {
+      try {
+        const result = await invoke('export_model_to_directory', { 
+          modelData, 
+          directoryPath, 
+          modelName 
+        }) as { success: boolean; path?: string; error?: string };
+        return result;
+      } catch (error) {
+        console.error('Error exporting model:', error);
+        return { success: false, error: `Failed to export model: ${error}` };
+      }
+    } else {
+      console.log('[Local] Exporting model to directory...');
+      
+      // Check if we have a directory handle from the File System Access API
+      const dirHandle = (globalThis as any).selectedDirectoryHandle;
+      
+      if (dirHandle && 'showDirectoryPicker' in window) {
+        try {
+          // Create model export data
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const fileName = `${modelName}_${timestamp}.json`;
+          
+          // Create export data with comprehensive information
+          const exportData = {
+            model_name: modelData.model_name || modelName,
+            timestamp,
+            metrics: modelData.comprehensive_metrics || {},
+            performance: {
+              mean_score: modelData.mean_score,
+              std_score: modelData.std_score,
+              cv_scores: modelData.cv_scores,
+              training_time: modelData.training_time
+            },
+            feature_importance: modelData.feature_importance || {},
+            hyperparameters: modelData.best_params || {},
+            export_info: {
+              exported_at: new Date().toISOString(),
+              export_format: 'json',
+              app_version: '1.0.0'
+            }
+          };
+          
+          // Write file to selected directory
+          const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(JSON.stringify(exportData, null, 2));
+          await writable.close();
+          
+          console.log('[FS] Model exported successfully:', fileName);
+          
+          return {
+            success: true,
+            path: `${directoryPath}/${fileName}`
+          };
+          
+        } catch (error) {
+          console.error('[FS] Model export failed:', error);
+          return {
+            success: false,
+            error: `Failed to export model: ${error}`
+          };
+        }
+      } else {
+        // Fallback - create download link for model data
+        try {
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const fileName = `${modelName}_${timestamp}.json`;
+          
+          const exportData = {
+            model_name: modelData.model_name || modelName,
+            timestamp,
+            metrics: modelData.comprehensive_metrics || {},
+            performance: {
+              mean_score: modelData.mean_score,
+              std_score: modelData.std_score,
+              cv_scores: modelData.cv_scores,
+              training_time: modelData.training_time
+            },
+            feature_importance: modelData.feature_importance || {},
+            hyperparameters: modelData.best_params || {},
+            export_info: {
+              exported_at: new Date().toISOString(),
+              export_format: 'json',
+              app_version: '1.0.0'
+            }
+          };
+          
+          // Create and trigger download
+          const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          
+          console.log('[Download] Model exported as download:', fileName);
+          
+          return {
+            success: true,
+            path: `Downloads/${fileName}`
+          };
+          
+        } catch (error) {
+          console.error('[Download] Model export failed:', error);
+          return {
+            success: false,
+            error: `Failed to export model: ${error}`
+          };
+        }
+      }
+    }
+  },
+
   async readCSVFile(filePath: string): Promise<string> {
     await loadTauriAPI();
     
@@ -1279,7 +1448,7 @@ export const tauriAPI = {
     }
   },
 
-  async startTraining(config: TrainingConfig, datasetData?: { data: string[][]; filePath: string }): Promise<boolean> {
+  async startTraining(config: TrainingConfig, datasetData?: { data: string[][]; headers?: string[]; filePath: string }): Promise<boolean> {
     await loadTauriAPI();
     
     if (isTauri && invoke) {
@@ -1349,7 +1518,7 @@ export const tauriAPI = {
   },
 
   // Call Python training engine directly
-  async callPythonTraining(config: TrainingConfig, datasetData: { data: string[][]; filePath: string }): Promise<boolean> {
+  async callPythonTraining(config: TrainingConfig, datasetData: { data: string[][]; headers?: string[]; filePath: string }): Promise<boolean> {
     console.log('[Python] Calling real Python training engine...');
     
     // Reset training state

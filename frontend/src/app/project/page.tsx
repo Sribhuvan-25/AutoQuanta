@@ -3,12 +3,13 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Plus, FolderOpen, Upload, BarChart3, Brain, Zap } from 'lucide-react';
+import { ArrowRight, Plus, FolderOpen, Upload, BarChart3, Brain, Zap, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FileUpload } from '@/components/common/FileUpload';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAppSelector } from '@/store/hooks';
 import { selectIsProcessing, selectProcessingStage, selectCurrentDataset } from '@/store/slices/dataSlice';
+import { tauriAPI } from '@/lib/tauri';
 
 interface Project {
   id: string;
@@ -35,6 +36,13 @@ export default function ProjectPage() {
   const [error, setError] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // New Project Modal state
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [projectName, setProjectName] = useState('');
+  const [projectDescription, setProjectDescription] = useState('');
+  const [selectedProjectDirectory, setSelectedProjectDirectory] = useState<string | null>(null);
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
 
   // Redux state
   const isProcessing = useAppSelector(selectIsProcessing);
@@ -100,7 +108,73 @@ export default function ProjectPage() {
     loadProjects();
   }, [loadProjects]);
 
-  // Create new project
+  // Handle directory selection for project
+  const handleSelectProjectDirectory = async () => {
+    try {
+      const directory = await tauriAPI.selectDirectory();
+      if (directory) {
+        setSelectedProjectDirectory(directory);
+      }
+    } catch (error) {
+      console.error('Failed to select directory:', error);
+      setError('Failed to open directory picker');
+    }
+  };
+
+  // Handle new project creation
+  const handleCreateProject = async () => {
+    if (!projectName.trim()) {
+      setError('Project name is required');
+      return;
+    }
+    
+    if (!selectedProjectDirectory) {
+      setError('Please select a directory for the project');
+      return;
+    }
+
+    setIsCreatingProject(true);
+    setError(null);
+
+    try {
+      const response = await fetch('http://localhost:8000/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          name: projectName.trim(), 
+          description: projectDescription.trim(),
+          directory: selectedProjectDirectory
+        })
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        // Store project directory globally for all save operations
+        localStorage.setItem('currentProjectDirectory', selectedProjectDirectory);
+        localStorage.setItem('currentProjectId', data.project.id);
+        localStorage.setItem('currentProjectName', projectName.trim());
+        
+        loadProjects(); // Refresh list
+        
+        // Reset modal state
+        setShowNewProjectModal(false);
+        setProjectName('');
+        setProjectDescription('');
+        setSelectedProjectDirectory(null);
+        
+        return data.project;
+      } else {
+        throw new Error(data.error || 'Failed to create project');
+      }
+    } catch (error) {
+      console.error('Failed to create project:', error);
+      setError(error instanceof Error ? error.message : 'Failed to create project');
+    } finally {
+      setIsCreatingProject(false);
+    }
+  };
+
+  // Create new project (legacy function for API compatibility)
   const createProject = useCallback(async (name: string, description: string) => {
     try {
       const response = await fetch('http://localhost:8000/projects', {
@@ -161,7 +235,7 @@ export default function ProjectPage() {
             <h1 className="text-3xl font-bold text-gray-900">Projects</h1>
             <p className="text-gray-600 mt-1">Manage your data science projects and files</p>
           </div>
-          <Button>
+          <Button onClick={() => setShowNewProjectModal(true)}>
             <Plus className="h-4 w-4 mr-2" />
             New Project
           </Button>
@@ -318,6 +392,122 @@ export default function ProjectPage() {
             <p>4. <strong>Make predictions:</strong> Use your trained models to make predictions on new data.</p>
           </div>
         </div>
+        
+        {/* New Project Modal */}
+        {showNewProjectModal && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b">
+                <h2 className="text-xl font-semibold text-gray-900">Create New Project</h2>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => {
+                    setShowNewProjectModal(false);
+                    setProjectName('');
+                    setProjectDescription('');
+                    setSelectedProjectDirectory(null);
+                    setError(null);
+                  }}
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 space-y-4">
+                {/* Error Display */}
+                {error && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                    <p className="text-sm text-red-600">{error}</p>
+                  </div>
+                )}
+
+                {/* Project Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Project Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter project name"
+                    disabled={isCreatingProject}
+                  />
+                </div>
+
+                {/* Project Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Description (Optional)
+                  </label>
+                  <textarea
+                    value={projectDescription}
+                    onChange={(e) => setProjectDescription(e.target.value)}
+                    rows={3}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter project description"
+                    disabled={isCreatingProject}
+                  />
+                </div>
+
+                {/* Directory Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Project Directory *
+                  </label>
+                  <div className="space-y-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleSelectProjectDirectory}
+                      disabled={isCreatingProject}
+                      className="w-full flex items-center justify-center gap-2"
+                    >
+                      <FolderOpen className="h-4 w-4" />
+                      {selectedProjectDirectory ? 'Change Directory' : 'Select Directory'}
+                    </Button>
+                    {selectedProjectDirectory && (
+                      <div className="p-3 bg-gray-50 rounded-lg">
+                        <p className="text-sm text-gray-600 break-all">
+                          <strong>Selected:</strong> {selectedProjectDirectory}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          All project data, models, and results will be saved here
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex justify-end gap-3 p-6 border-t bg-gray-50">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowNewProjectModal(false);
+                    setProjectName('');
+                    setProjectDescription('');
+                    setSelectedProjectDirectory(null);
+                    setError(null);
+                  }}
+                  disabled={isCreatingProject}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleCreateProject}
+                  disabled={!projectName.trim() || !selectedProjectDirectory || isCreatingProject}
+                >
+                  {isCreatingProject ? 'Creating...' : 'Create Project'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AppLayout>
   );

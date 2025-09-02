@@ -60,13 +60,21 @@ export function ProjectCreationWizard({ isOpen, onClose, onProjectCreated }: Pro
   const handleSelectDirectory = async () => {
     setIsSelectingDirectory(true);
     try {
-      const selectedDirectory = await tauriAPI.selectProjectDirectory();
+      console.log('Starting directory selection...');
+      console.log('File System Access API supported:', 'showDirectoryPicker' in window);
+      
+      const selectedDirectory = await tauriAPI.selectDirectory();
+      console.log('Directory selection result:', selectedDirectory);
+      
       if (selectedDirectory) {
         setFormData(prev => ({ ...prev, parentDirectory: selectedDirectory }));
         setErrors(prev => ({ ...prev, parentDirectory: undefined }));
+      } else {
+        console.log('No directory was selected');
       }
     } catch (error) {
       console.error('Error selecting directory:', error);
+      alert(`Error selecting directory: ${error}`);
     } finally {
       setIsSelectingDirectory(false);
     }
