@@ -7,10 +7,11 @@ import pandas as pd
 import numpy as np
 from typing import Dict, List, Any, Optional, Tuple, Union
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.preprocessing import OneHotEncoder, LabelEncoder
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder, StandardScaler, MinMaxScaler, RobustScaler, OrdinalEncoder
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
+from scipy import stats
 import logging
 
 from ..utils import (
@@ -27,24 +28,183 @@ logger = logging.getLogger(__name__)
 
 class DropColumnsTransformer(BaseEstimator, TransformerMixin):
     """Custom transformer to drop specified columns."""
-    
+
     def __init__(self, columns_to_drop: List[str]):
         self.columns_to_drop = columns_to_drop
-    
+
     def fit(self, X, y=None):
         return self
-    
+
     def transform(self, X):
         if isinstance(X, pd.DataFrame):
             return X.drop(columns=self.columns_to_drop, errors='ignore')
         else:
             # If it's a numpy array, we can't drop by name
             return X
-    
+
     def get_feature_names_out(self, input_features=None):
         if input_features is None:
             return np.array([])
         return np.array([f for f in input_features if f not in self.columns_to_drop])
+
+
+class OutlierHandler(BaseEstimator, TransformerMixin):
+    """Custom transformer to detect and handle outliers in numeric data."""
+
+    def __init__(self, method='iqr', threshold=1.5, strategy='clip'):
+        """
+        Initialize outlier handler.
+
+        Args:
+            method: 'iqr', 'zscore', or 'isolation'
+            threshold: Threshold for outlier detection (1.5 for IQR, 3 for zscore)
+            strategy: 'clip', 'remove', or 'transform'
+        """
+        self.method = method
+        self.threshold = threshold
+        self.strategy = strategy
+        self.outlier_bounds_ = {}
+        self.outlier_stats_ = {}
+
+    def fit(self, X, y=None):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        for col in X.select_dtypes(include=[np.number]).columns:
+            if self.method == 'iqr':
+                Q1 = X[col].quantile(0.25)
+                Q3 = X[col].quantile(0.75)
+                IQR = Q3 - Q1
+                lower_bound = Q1 - self.threshold * IQR
+                upper_bound = Q3 + self.threshold * IQR
+                self.outlier_bounds_[col] = (lower_bound, upper_bound)
+
+            elif self.method == 'zscore':
+                mean = X[col].mean()
+                std = X[col].std()
+                lower_bound = mean - self.threshold * std
+                upper_bound = mean + self.threshold * std
+                self.outlier_bounds_[col] = (lower_bound, upper_bound)
+
+            # Store outlier statistics
+            outliers = self._detect_outliers_for_column(X[col], col)
+            self.outlier_stats_[col] = {
+                'count': len(outliers),
+                'percentage': len(outliers) / len(X) * 100 if len(X) > 0 else 0
+            }
+
+        return self
+
+    def transform(self, X):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        X_transformed = X.copy()
+
+        for col in X_transformed.select_dtypes(include=[np.number]).columns:
+            if col in self.outlier_bounds_:
+                lower_bound, upper_bound = self.outlier_bounds_[col]
+
+                if self.strategy == 'clip':
+                    X_transformed[col] = X_transformed[col].clip(lower_bound, upper_bound)
+                elif self.strategy == 'remove':
+                    # Mark outliers as NaN (will be handled by imputer)
+                    mask = (X_transformed[col] < lower_bound) | (X_transformed[col] > upper_bound)
+                    X_transformed.loc[mask, col] = np.nan
+                elif self.strategy == 'transform':
+                    # Log transform for positive values
+                    if (X_transformed[col] > 0).all():
+                        X_transformed[col] = np.log1p(X_transformed[col])
+
+        return X_transformed
+
+    def _detect_outliers_for_column(self, series, col_name):
+        """Detect outliers for a specific column."""
+        if col_name not in self.outlier_bounds_:
+            return []
+
+        lower_bound, upper_bound = self.outlier_bounds_[col_name]
+        outliers = series[(series < lower_bound) | (series > upper_bound)]
+        return outliers.index.tolist()
+
+    def get_outlier_report(self):
+        """Get a report of outlier detection results."""
+        return self.outlier_stats_.copy()
+
+
+class TargetEncoder(BaseEstimator, TransformerMixin):
+    """Target encoder for categorical variables."""
+
+    def __init__(self, smoothing=1.0, min_samples_leaf=1):
+        self.smoothing = smoothing
+        self.min_samples_leaf = min_samples_leaf
+        self.target_mean_ = None
+        self.encodings_ = {}
+
+    def fit(self, X, y):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        self.target_mean_ = y.mean()
+
+        for col in X.columns:
+            # Calculate mean target for each unique category
+            category_stats = {}
+            for category in X[col].unique():
+                if pd.notna(category):
+                    mask = X[col] == category
+                    category_mean = y[mask].mean()
+                    category_count = mask.sum()
+
+                    # Apply smoothing
+                    smoothed_mean = (category_count * category_mean + self.smoothing * self.target_mean_) / (category_count + self.smoothing)
+                    category_stats[category] = smoothed_mean
+
+            # Store encodings for this column
+            self.encodings_[col] = category_stats
+
+        return self
+
+    def transform(self, X):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        X_encoded = X.copy()
+
+        for col in X.columns:
+            if col in self.encodings_:
+                # Apply encoding with fallback to global mean
+                X_encoded[col] = X[col].map(self.encodings_[col]).fillna(self.target_mean_)
+
+        return X_encoded.values
+
+
+class FrequencyEncoder(BaseEstimator, TransformerMixin):
+    """Frequency encoder for categorical variables."""
+
+    def __init__(self):
+        self.frequency_maps_ = {}
+
+    def fit(self, X, y=None):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        for col in X.columns:
+            self.frequency_maps_[col] = X[col].value_counts().to_dict()
+
+        return self
+
+    def transform(self, X):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        X_encoded = X.copy()
+
+        for col in X.columns:
+            if col in self.frequency_maps_:
+                X_encoded[col] = X[col].map(self.frequency_maps_[col]).fillna(0)
+
+        return X_encoded.values
 
 
 class AutoPreprocessor:
@@ -53,24 +213,33 @@ class AutoPreprocessor:
     Handles missing values, categorical encoding, and feature preparation.
     """
     
-    def __init__(self, 
+    def __init__(self,
                  target_column: str,
                  task_type: Optional[str] = None,
                  max_cardinality: int = None,
                  drop_id_columns: bool = True,
-                 handle_missing: bool = True):
+                 handle_missing: bool = True,
+                 scaling_strategy: str = 'standard',
+                 handle_outliers: bool = True,
+                 outlier_method: str = 'iqr',
+                 categorical_encoding: str = 'onehot'):
         
         self.target_column = target_column
         self.task_type = task_type
         self.max_cardinality = max_cardinality or DEFAULT_CONFIG['max_cardinality']
         self.drop_id_columns = drop_id_columns
         self.handle_missing = handle_missing
+        self.scaling_strategy = scaling_strategy
+        self.handle_outliers = handle_outliers
+        self.outlier_method = outlier_method
+        self.categorical_encoding = categorical_encoding
         
         # Will be set during fit
         self.pipeline = None
         self.feature_names_out = None
         self.dropped_columns = []
         self.label_encoder = None
+        self.outlier_handler = None
         self.preprocessing_report = {}
         self.is_fitted = False
     
@@ -275,27 +444,80 @@ class AutoPreprocessor:
     
     def _create_transformers(self, numeric_columns: List[str], categorical_columns: List[str]) -> List[Tuple]:
         transformers = []
-        
-        # Numeric transformer
-        if numeric_columns and self.handle_missing:
-            numeric_transformer = SimpleImputer(strategy='median')
-            transformers.append(('num', numeric_transformer, numeric_columns))
-        elif numeric_columns:
-            transformers.append(('num', 'passthrough', numeric_columns))
+
+        # Numeric transformer with scaling
+        if numeric_columns:
+            numeric_steps = []
+
+            # Add outlier handling (before imputation and scaling)
+            if self.handle_outliers:
+                # Extract threshold from outlier method
+                if self.outlier_method == 'iqr':
+                    outlier_threshold = 1.5
+                elif self.outlier_method == 'zscore':
+                    outlier_threshold = 3.0
+                else:
+                    outlier_threshold = 1.5  # default
+
+                numeric_steps.append(('outlier_handler', OutlierHandler(
+                    method=self.outlier_method,
+                    threshold=outlier_threshold,
+                    strategy='clip'  # Default to clipping outliers
+                )))
+
+            # Add missing value handling (after outlier handling)
+            if self.handle_missing:
+                numeric_steps.append(('imputer', SimpleImputer(strategy='median')))
+
+            # Add scaling
+            if self.scaling_strategy == 'standard':
+                numeric_steps.append(('scaler', StandardScaler()))
+            elif self.scaling_strategy == 'minmax':
+                numeric_steps.append(('scaler', MinMaxScaler()))
+            elif self.scaling_strategy == 'robust':
+                numeric_steps.append(('scaler', RobustScaler()))
+            elif self.scaling_strategy == 'none':
+                pass  # No scaling
+
+            if numeric_steps:
+                numeric_transformer = Pipeline(numeric_steps)
+                transformers.append(('num', numeric_transformer, numeric_columns))
+            else:
+                transformers.append(('num', 'passthrough', numeric_columns))
         
         # Categorical transformer
         if categorical_columns:
             categorical_steps = []
-            
+
             if self.handle_missing:
                 categorical_steps.append(
                     ('imputer', SimpleImputer(strategy='constant', fill_value='_missing_'))
                 )
-            
-            categorical_steps.append(
-                ('onehot', OneHotEncoder(drop='first', sparse_output=False, handle_unknown='ignore'))
-            )
-            
+
+            # Choose encoding strategy
+            if self.categorical_encoding == 'onehot':
+                categorical_steps.append(
+                    ('onehot', OneHotEncoder(drop='first', sparse_output=False, handle_unknown='ignore'))
+                )
+            elif self.categorical_encoding == 'target':
+                # Target encoding requires y during fit - will be handled separately
+                categorical_steps.append(
+                    ('target', TargetEncoder(smoothing=1.0))
+                )
+            elif self.categorical_encoding == 'ordinal':
+                categorical_steps.append(
+                    ('ordinal', OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1))
+                )
+            elif self.categorical_encoding == 'frequency':
+                categorical_steps.append(
+                    ('frequency', FrequencyEncoder())
+                )
+            else:
+                # Default to one-hot
+                categorical_steps.append(
+                    ('onehot', OneHotEncoder(drop='first', sparse_output=False, handle_unknown='ignore'))
+                )
+
             categorical_transformer = Pipeline(categorical_steps)
             transformers.append(('cat', categorical_transformer, categorical_columns))
         
@@ -303,19 +525,27 @@ class AutoPreprocessor:
     
     def _get_feature_names_out(self, X: pd.DataFrame, numeric_columns: List[str], categorical_columns: List[str]) -> List[str]:
         feature_names = []
-        
+
         # Add numeric column names
         feature_names.extend(numeric_columns)
-        
-        # Add categorical feature names (after one-hot encoding)
+
+        # Add categorical feature names based on encoding strategy
         for col in categorical_columns:
-            # Get unique categories (excluding NaN)
-            categories = sorted(X[col].dropna().astype(str).unique())
-            
-            # OneHotEncoder drops the first category, so we start from index 1
-            for cat in categories[1:]:
-                feature_names.append(f"{col}_{cat}")
-        
+            if self.categorical_encoding == 'onehot':
+                # Get unique categories (excluding NaN)
+                categories = sorted(X[col].dropna().astype(str).unique())
+                # OneHotEncoder drops the first category, so we start from index 1
+                for cat in categories[1:]:
+                    feature_names.append(f"{col}_{cat}")
+            elif self.categorical_encoding in ['target', 'ordinal', 'frequency']:
+                # These encodings keep the original column name
+                feature_names.append(col)
+            else:
+                # Default case (one-hot)
+                categories = sorted(X[col].dropna().astype(str).unique())
+                for cat in categories[1:]:
+                    feature_names.append(f"{col}_{cat}")
+
         return feature_names
     
     def _create_preprocessing_report(self, X: pd.DataFrame, y: pd.Series, 
@@ -332,8 +562,16 @@ class AutoPreprocessor:
                 'numeric': 'median imputation' if self.handle_missing else 'none',
                 'categorical': 'constant imputation (_missing_)' if self.handle_missing else 'none'
             },
+            'outlier_handling': {
+                'enabled': self.handle_outliers,
+                'method': self.outlier_method if self.handle_outliers else 'none',
+                'strategy': 'clip' if self.handle_outliers else 'none'
+            },
+            'scaling_strategy': {
+                'numeric': self.scaling_strategy
+            },
             'encoding_strategy': {
-                'categorical': f'one-hot encoding (max cardinality: {self.max_cardinality})'
+                'categorical': f'{self.categorical_encoding} encoding (max cardinality: {self.max_cardinality})'
             },
             'target_preprocessing': {
                 'classification': 'label encoding' if self.task_type == 'classification' else 'none',
