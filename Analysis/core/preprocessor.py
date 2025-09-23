@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 from typing import Dict, List, Any, Optional, Tuple, Union
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.preprocessing import OneHotEncoder, LabelEncoder, StandardScaler, MinMaxScaler, RobustScaler
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder, StandardScaler, MinMaxScaler, RobustScaler, OrdinalEncoder
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
@@ -132,6 +132,81 @@ class OutlierHandler(BaseEstimator, TransformerMixin):
         return self.outlier_stats_.copy()
 
 
+class TargetEncoder(BaseEstimator, TransformerMixin):
+    """Target encoder for categorical variables."""
+
+    def __init__(self, smoothing=1.0, min_samples_leaf=1):
+        self.smoothing = smoothing
+        self.min_samples_leaf = min_samples_leaf
+        self.target_mean_ = None
+        self.encodings_ = {}
+
+    def fit(self, X, y):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        self.target_mean_ = y.mean()
+
+        for col in X.columns:
+            # Calculate mean target for each unique category
+            category_stats = {}
+            for category in X[col].unique():
+                if pd.notna(category):
+                    mask = X[col] == category
+                    category_mean = y[mask].mean()
+                    category_count = mask.sum()
+
+                    # Apply smoothing
+                    smoothed_mean = (category_count * category_mean + self.smoothing * self.target_mean_) / (category_count + self.smoothing)
+                    category_stats[category] = smoothed_mean
+
+            # Store encodings for this column
+            self.encodings_[col] = category_stats
+
+        return self
+
+    def transform(self, X):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        X_encoded = X.copy()
+
+        for col in X.columns:
+            if col in self.encodings_:
+                # Apply encoding with fallback to global mean
+                X_encoded[col] = X[col].map(self.encodings_[col]).fillna(self.target_mean_)
+
+        return X_encoded.values
+
+
+class FrequencyEncoder(BaseEstimator, TransformerMixin):
+    """Frequency encoder for categorical variables."""
+
+    def __init__(self):
+        self.frequency_maps_ = {}
+
+    def fit(self, X, y=None):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        for col in X.columns:
+            self.frequency_maps_[col] = X[col].value_counts().to_dict()
+
+        return self
+
+    def transform(self, X):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        X_encoded = X.copy()
+
+        for col in X.columns:
+            if col in self.frequency_maps_:
+                X_encoded[col] = X[col].map(self.frequency_maps_[col]).fillna(0)
+
+        return X_encoded.values
+
+
 class AutoPreprocessor:
     """
     Automatic preprocessing pipeline for tabular data.
@@ -146,7 +221,8 @@ class AutoPreprocessor:
                  handle_missing: bool = True,
                  scaling_strategy: str = 'standard',
                  handle_outliers: bool = True,
-                 outlier_method: str = 'iqr'):
+                 outlier_method: str = 'iqr',
+                 categorical_encoding: str = 'onehot'):
         
         self.target_column = target_column
         self.task_type = task_type
@@ -156,6 +232,7 @@ class AutoPreprocessor:
         self.scaling_strategy = scaling_strategy
         self.handle_outliers = handle_outliers
         self.outlier_method = outlier_method
+        self.categorical_encoding = categorical_encoding
         
         # Will be set during fit
         self.pipeline = None
@@ -411,16 +488,36 @@ class AutoPreprocessor:
         # Categorical transformer
         if categorical_columns:
             categorical_steps = []
-            
+
             if self.handle_missing:
                 categorical_steps.append(
                     ('imputer', SimpleImputer(strategy='constant', fill_value='_missing_'))
                 )
-            
-            categorical_steps.append(
-                ('onehot', OneHotEncoder(drop='first', sparse_output=False, handle_unknown='ignore'))
-            )
-            
+
+            # Choose encoding strategy
+            if self.categorical_encoding == 'onehot':
+                categorical_steps.append(
+                    ('onehot', OneHotEncoder(drop='first', sparse_output=False, handle_unknown='ignore'))
+                )
+            elif self.categorical_encoding == 'target':
+                # Target encoding requires y during fit - will be handled separately
+                categorical_steps.append(
+                    ('target', TargetEncoder(smoothing=1.0))
+                )
+            elif self.categorical_encoding == 'ordinal':
+                categorical_steps.append(
+                    ('ordinal', OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1))
+                )
+            elif self.categorical_encoding == 'frequency':
+                categorical_steps.append(
+                    ('frequency', FrequencyEncoder())
+                )
+            else:
+                # Default to one-hot
+                categorical_steps.append(
+                    ('onehot', OneHotEncoder(drop='first', sparse_output=False, handle_unknown='ignore'))
+                )
+
             categorical_transformer = Pipeline(categorical_steps)
             transformers.append(('cat', categorical_transformer, categorical_columns))
         
@@ -428,19 +525,27 @@ class AutoPreprocessor:
     
     def _get_feature_names_out(self, X: pd.DataFrame, numeric_columns: List[str], categorical_columns: List[str]) -> List[str]:
         feature_names = []
-        
+
         # Add numeric column names
         feature_names.extend(numeric_columns)
-        
-        # Add categorical feature names (after one-hot encoding)
+
+        # Add categorical feature names based on encoding strategy
         for col in categorical_columns:
-            # Get unique categories (excluding NaN)
-            categories = sorted(X[col].dropna().astype(str).unique())
-            
-            # OneHotEncoder drops the first category, so we start from index 1
-            for cat in categories[1:]:
-                feature_names.append(f"{col}_{cat}")
-        
+            if self.categorical_encoding == 'onehot':
+                # Get unique categories (excluding NaN)
+                categories = sorted(X[col].dropna().astype(str).unique())
+                # OneHotEncoder drops the first category, so we start from index 1
+                for cat in categories[1:]:
+                    feature_names.append(f"{col}_{cat}")
+            elif self.categorical_encoding in ['target', 'ordinal', 'frequency']:
+                # These encodings keep the original column name
+                feature_names.append(col)
+            else:
+                # Default case (one-hot)
+                categories = sorted(X[col].dropna().astype(str).unique())
+                for cat in categories[1:]:
+                    feature_names.append(f"{col}_{cat}")
+
         return feature_names
     
     def _create_preprocessing_report(self, X: pd.DataFrame, y: pd.Series, 
@@ -466,7 +571,7 @@ class AutoPreprocessor:
                 'numeric': self.scaling_strategy
             },
             'encoding_strategy': {
-                'categorical': f'one-hot encoding (max cardinality: {self.max_cardinality})'
+                'categorical': f'{self.categorical_encoding} encoding (max cardinality: {self.max_cardinality})'
             },
             'target_preprocessing': {
                 'classification': 'label encoding' if self.task_type == 'classification' else 'none',
