@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 from typing import Dict, List, Any, Optional, Tuple, Union
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.preprocessing import OneHotEncoder, LabelEncoder
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder, StandardScaler, MinMaxScaler, RobustScaler
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
@@ -53,18 +53,24 @@ class AutoPreprocessor:
     Handles missing values, categorical encoding, and feature preparation.
     """
     
-    def __init__(self, 
+    def __init__(self,
                  target_column: str,
                  task_type: Optional[str] = None,
                  max_cardinality: int = None,
                  drop_id_columns: bool = True,
-                 handle_missing: bool = True):
+                 handle_missing: bool = True,
+                 scaling_strategy: str = 'standard',
+                 handle_outliers: bool = True,
+                 outlier_method: str = 'iqr'):
         
         self.target_column = target_column
         self.task_type = task_type
         self.max_cardinality = max_cardinality or DEFAULT_CONFIG['max_cardinality']
         self.drop_id_columns = drop_id_columns
         self.handle_missing = handle_missing
+        self.scaling_strategy = scaling_strategy
+        self.handle_outliers = handle_outliers
+        self.outlier_method = outlier_method
         
         # Will be set during fit
         self.pipeline = None
@@ -275,13 +281,30 @@ class AutoPreprocessor:
     
     def _create_transformers(self, numeric_columns: List[str], categorical_columns: List[str]) -> List[Tuple]:
         transformers = []
-        
-        # Numeric transformer
-        if numeric_columns and self.handle_missing:
-            numeric_transformer = SimpleImputer(strategy='median')
-            transformers.append(('num', numeric_transformer, numeric_columns))
-        elif numeric_columns:
-            transformers.append(('num', 'passthrough', numeric_columns))
+
+        # Numeric transformer with scaling
+        if numeric_columns:
+            numeric_steps = []
+
+            # Add missing value handling
+            if self.handle_missing:
+                numeric_steps.append(('imputer', SimpleImputer(strategy='median')))
+
+            # Add scaling
+            if self.scaling_strategy == 'standard':
+                numeric_steps.append(('scaler', StandardScaler()))
+            elif self.scaling_strategy == 'minmax':
+                numeric_steps.append(('scaler', MinMaxScaler()))
+            elif self.scaling_strategy == 'robust':
+                numeric_steps.append(('scaler', RobustScaler()))
+            elif self.scaling_strategy == 'none':
+                pass  # No scaling
+
+            if numeric_steps:
+                numeric_transformer = Pipeline(numeric_steps)
+                transformers.append(('num', numeric_transformer, numeric_columns))
+            else:
+                transformers.append(('num', 'passthrough', numeric_columns))
         
         # Categorical transformer
         if categorical_columns:
@@ -331,6 +354,9 @@ class AutoPreprocessor:
             'missing_value_strategy': {
                 'numeric': 'median imputation' if self.handle_missing else 'none',
                 'categorical': 'constant imputation (_missing_)' if self.handle_missing else 'none'
+            },
+            'scaling_strategy': {
+                'numeric': self.scaling_strategy
             },
             'encoding_strategy': {
                 'categorical': f'one-hot encoding (max cardinality: {self.max_cardinality})'
