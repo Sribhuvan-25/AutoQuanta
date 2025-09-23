@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 from typing import Dict, List, Any, Optional, Tuple, Union
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.preprocessing import OneHotEncoder, LabelEncoder, StandardScaler, MinMaxScaler, RobustScaler, OrdinalEncoder
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder, StandardScaler, MinMaxScaler, RobustScaler, OrdinalEncoder, PolynomialFeatures, KBinsDiscretizer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
@@ -207,6 +207,179 @@ class FrequencyEncoder(BaseEstimator, TransformerMixin):
         return X_encoded.values
 
 
+class FeatureEngineer(BaseEstimator, TransformerMixin):
+    """Feature engineering transformer for creating new features."""
+
+    def __init__(self,
+                 create_polynomial: bool = False,
+                 polynomial_degree: int = 2,
+                 create_interactions: bool = False,
+                 interaction_pairs: Optional[List[Tuple[str, str]]] = None,
+                 create_binning: bool = False,
+                 binning_strategy: str = 'quantile',
+                 n_bins: int = 5):
+        """
+        Initialize feature engineer.
+
+        Args:
+            create_polynomial: Create polynomial features
+            polynomial_degree: Degree for polynomial features
+            create_interactions: Create interaction terms
+            interaction_pairs: Specific column pairs for interactions (auto-detected if None)
+            create_binning: Create binned versions of continuous features
+            binning_strategy: 'uniform', 'quantile', or 'kmeans'
+            n_bins: Number of bins for discretization
+        """
+        self.create_polynomial = create_polynomial
+        self.polynomial_degree = polynomial_degree
+        self.create_interactions = create_interactions
+        self.interaction_pairs = interaction_pairs
+        self.create_binning = create_binning
+        self.binning_strategy = binning_strategy
+        self.n_bins = n_bins
+
+        # Will be set during fit
+        self.feature_names_in_ = None
+        self.feature_names_out_ = None
+        self.numeric_columns_ = None
+        self.poly_transformer_ = None
+        self.binning_transformers_ = {}
+        self.selected_interactions_ = []
+
+    def fit(self, X, y=None):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        self.feature_names_in_ = list(X.columns)
+        self.numeric_columns_ = list(X.select_dtypes(include=[np.number]).columns)
+
+        # Fit polynomial features if requested
+        if self.create_polynomial and len(self.numeric_columns_) > 0:
+            self.poly_transformer_ = PolynomialFeatures(
+                degree=self.polynomial_degree,
+                include_bias=False,
+                interaction_only=False
+            )
+            X_numeric = X[self.numeric_columns_]
+            self.poly_transformer_.fit(X_numeric)
+
+        # Determine interaction pairs
+        if self.create_interactions:
+            if self.interaction_pairs is None:
+                # Auto-select important interaction pairs (limit to avoid explosion)
+                self.selected_interactions_ = self._select_interaction_pairs(X, y)
+            else:
+                self.selected_interactions_ = [
+                    (col1, col2) for col1, col2 in self.interaction_pairs
+                    if col1 in X.columns and col2 in X.columns
+                ]
+
+        # Fit binning transformers
+        if self.create_binning:
+            for col in self.numeric_columns_:
+                if X[col].nunique() > self.n_bins:  # Only bin if enough unique values
+                    binning_transformer = KBinsDiscretizer(
+                        n_bins=self.n_bins,
+                        encode='ordinal',
+                        strategy=self.binning_strategy
+                    )
+                    binning_transformer.fit(X[[col]])
+                    self.binning_transformers_[col] = binning_transformer
+
+        # Generate output feature names
+        self.feature_names_out_ = self._generate_feature_names(X)
+
+        return self
+
+    def transform(self, X):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X, columns=self.feature_names_in_)
+
+        X_engineered = X.copy()
+
+        # Add polynomial features
+        if self.create_polynomial and self.poly_transformer_ is not None:
+            X_numeric = X[self.numeric_columns_]
+            poly_features = self.poly_transformer_.transform(X_numeric)
+            poly_feature_names = self.poly_transformer_.get_feature_names_out(self.numeric_columns_)
+
+            # Add polynomial features (excluding original features which are duplicated)
+            for i, feature_name in enumerate(poly_feature_names):
+                if feature_name not in self.numeric_columns_:  # Skip original features
+                    X_engineered[f'poly_{feature_name}'] = poly_features[:, i]
+
+        # Add interaction features
+        if self.create_interactions:
+            for col1, col2 in self.selected_interactions_:
+                if col1 in X.columns and col2 in X.columns:
+                    # Create interaction term
+                    interaction_name = f'{col1}_x_{col2}'
+                    if pd.api.types.is_numeric_dtype(X[col1]) and pd.api.types.is_numeric_dtype(X[col2]):
+                        X_engineered[interaction_name] = X[col1] * X[col2]
+                    else:
+                        # For categorical interactions, create combined categories
+                        X_engineered[interaction_name] = X[col1].astype(str) + '_' + X[col2].astype(str)
+
+        # Add binned features
+        if self.create_binning:
+            for col, transformer in self.binning_transformers_.items():
+                if col in X.columns:
+                    binned_values = transformer.transform(X[[col]])
+                    X_engineered[f'{col}_binned'] = binned_values.flatten()
+
+        return X_engineered
+
+    def _select_interaction_pairs(self, X, y, max_pairs=10):
+        """Automatically select promising interaction pairs."""
+        numeric_cols = self.numeric_columns_
+        categorical_cols = [col for col in X.columns if col not in numeric_cols]
+
+        interaction_pairs = []
+
+        # Numeric x Numeric interactions (top correlations)
+        if len(numeric_cols) >= 2:
+            from itertools import combinations
+            num_pairs = list(combinations(numeric_cols, 2))
+            # Limit to avoid feature explosion
+            interaction_pairs.extend(num_pairs[:min(5, len(num_pairs))])
+
+        # Numeric x Categorical interactions (if any)
+        if len(numeric_cols) >= 1 and len(categorical_cols) >= 1:
+            # Add a few promising numeric-categorical pairs
+            for num_col in numeric_cols[:3]:  # Limit to top 3 numeric columns
+                for cat_col in categorical_cols[:2]:  # Limit to top 2 categorical
+                    interaction_pairs.append((num_col, cat_col))
+
+        return interaction_pairs[:max_pairs]  # Limit total interactions
+
+    def _generate_feature_names(self, X):
+        """Generate names for all output features."""
+        feature_names = list(X.columns)  # Start with original features
+
+        # Add polynomial feature names
+        if self.create_polynomial and self.poly_transformer_ is not None:
+            poly_names = self.poly_transformer_.get_feature_names_out(self.numeric_columns_)
+            for name in poly_names:
+                if name not in self.numeric_columns_:  # Skip duplicated original features
+                    feature_names.append(f'poly_{name}')
+
+        # Add interaction feature names
+        if self.create_interactions:
+            for col1, col2 in self.selected_interactions_:
+                feature_names.append(f'{col1}_x_{col2}')
+
+        # Add binned feature names
+        if self.create_binning:
+            for col in self.binning_transformers_.keys():
+                feature_names.append(f'{col}_binned')
+
+        return feature_names
+
+    def get_feature_names_out(self, input_features=None):
+        """Get output feature names."""
+        return self.feature_names_out_
+
+
 class AutoPreprocessor:
     """
     Automatic preprocessing pipeline for tabular data.
@@ -222,7 +395,12 @@ class AutoPreprocessor:
                  scaling_strategy: str = 'standard',
                  handle_outliers: bool = True,
                  outlier_method: str = 'iqr',
-                 categorical_encoding: str = 'onehot'):
+                 categorical_encoding: str = 'onehot',
+                 enable_feature_engineering: bool = False,
+                 create_polynomial: bool = False,
+                 polynomial_degree: int = 2,
+                 create_interactions: bool = False,
+                 create_binning: bool = False):
         
         self.target_column = target_column
         self.task_type = task_type
@@ -233,6 +411,11 @@ class AutoPreprocessor:
         self.handle_outliers = handle_outliers
         self.outlier_method = outlier_method
         self.categorical_encoding = categorical_encoding
+        self.enable_feature_engineering = enable_feature_engineering
+        self.create_polynomial = create_polynomial
+        self.polynomial_degree = polynomial_degree
+        self.create_interactions = create_interactions
+        self.create_binning = create_binning
         
         # Will be set during fit
         self.pipeline = None
@@ -240,6 +423,7 @@ class AutoPreprocessor:
         self.dropped_columns = []
         self.label_encoder = None
         self.outlier_handler = None
+        self.feature_engineer = None
         self.preprocessing_report = {}
         self.is_fitted = False
     
@@ -262,8 +446,23 @@ class AutoPreprocessor:
             
             # Remove dropped columns
             X_clean = X.drop(columns=self.dropped_columns, errors='ignore')
-            
-            # Separate column types
+
+            # Apply feature engineering before separation (if enabled)
+            if self.enable_feature_engineering:
+                self.feature_engineer = FeatureEngineer(
+                    create_polynomial=self.create_polynomial,
+                    polynomial_degree=self.polynomial_degree,
+                    create_interactions=self.create_interactions,
+                    create_binning=self.create_binning
+                )
+                self.feature_engineer.fit(X_clean, y)
+                X_clean = self.feature_engineer.transform(X_clean)
+
+                # Convert back to DataFrame if needed
+                if not isinstance(X_clean, pd.DataFrame):
+                    X_clean = pd.DataFrame(X_clean, columns=self.feature_engineer.get_feature_names_out())
+
+            # Separate column types (after feature engineering)
             numeric_columns, categorical_columns = self._separate_column_types(X_clean)
             
             # Filter categorical columns by cardinality
@@ -329,17 +528,25 @@ class AutoPreprocessor:
     def transform(self, X: pd.DataFrame) -> np.ndarray:
         if not self.is_fitted:
             raise ValueError("Preprocessor must be fitted before transforming")
-        
+
         # Make a copy to avoid modifying the original
         X_copy = X.copy()
-        
+
         # Remove target column if present
         if self.target_column in X_copy.columns:
             X_copy = X_copy.drop(columns=[self.target_column])
-        
+
+        # Apply feature engineering first (if enabled)
+        if self.enable_feature_engineering and self.feature_engineer is not None:
+            X_copy = self.feature_engineer.transform(X_copy)
+
+            # Convert back to DataFrame if needed
+            if not isinstance(X_copy, pd.DataFrame):
+                X_copy = pd.DataFrame(X_copy, columns=self.feature_engineer.get_feature_names_out())
+
         if self.pipeline is None:
             return X_copy.values
-        
+
         return self.pipeline.transform(X_copy)
     
     def transform_target(self, y: pd.Series) -> np.ndarray:
@@ -572,6 +779,13 @@ class AutoPreprocessor:
             },
             'encoding_strategy': {
                 'categorical': f'{self.categorical_encoding} encoding (max cardinality: {self.max_cardinality})'
+            },
+            'feature_engineering': {
+                'enabled': self.enable_feature_engineering,
+                'polynomial_features': self.create_polynomial,
+                'polynomial_degree': self.polynomial_degree if self.create_polynomial else None,
+                'interaction_features': self.create_interactions,
+                'binning_features': self.create_binning
             },
             'target_preprocessing': {
                 'classification': 'label encoding' if self.task_type == 'classification' else 'none',
