@@ -11,6 +11,7 @@ from sklearn.preprocessing import OneHotEncoder, LabelEncoder, StandardScaler, M
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
+from scipy import stats
 import logging
 
 from ..utils import (
@@ -27,24 +28,108 @@ logger = logging.getLogger(__name__)
 
 class DropColumnsTransformer(BaseEstimator, TransformerMixin):
     """Custom transformer to drop specified columns."""
-    
+
     def __init__(self, columns_to_drop: List[str]):
         self.columns_to_drop = columns_to_drop
-    
+
     def fit(self, X, y=None):
         return self
-    
+
     def transform(self, X):
         if isinstance(X, pd.DataFrame):
             return X.drop(columns=self.columns_to_drop, errors='ignore')
         else:
             # If it's a numpy array, we can't drop by name
             return X
-    
+
     def get_feature_names_out(self, input_features=None):
         if input_features is None:
             return np.array([])
         return np.array([f for f in input_features if f not in self.columns_to_drop])
+
+
+class OutlierHandler(BaseEstimator, TransformerMixin):
+    """Custom transformer to detect and handle outliers in numeric data."""
+
+    def __init__(self, method='iqr', threshold=1.5, strategy='clip'):
+        """
+        Initialize outlier handler.
+
+        Args:
+            method: 'iqr', 'zscore', or 'isolation'
+            threshold: Threshold for outlier detection (1.5 for IQR, 3 for zscore)
+            strategy: 'clip', 'remove', or 'transform'
+        """
+        self.method = method
+        self.threshold = threshold
+        self.strategy = strategy
+        self.outlier_bounds_ = {}
+        self.outlier_stats_ = {}
+
+    def fit(self, X, y=None):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        for col in X.select_dtypes(include=[np.number]).columns:
+            if self.method == 'iqr':
+                Q1 = X[col].quantile(0.25)
+                Q3 = X[col].quantile(0.75)
+                IQR = Q3 - Q1
+                lower_bound = Q1 - self.threshold * IQR
+                upper_bound = Q3 + self.threshold * IQR
+                self.outlier_bounds_[col] = (lower_bound, upper_bound)
+
+            elif self.method == 'zscore':
+                mean = X[col].mean()
+                std = X[col].std()
+                lower_bound = mean - self.threshold * std
+                upper_bound = mean + self.threshold * std
+                self.outlier_bounds_[col] = (lower_bound, upper_bound)
+
+            # Store outlier statistics
+            outliers = self._detect_outliers_for_column(X[col], col)
+            self.outlier_stats_[col] = {
+                'count': len(outliers),
+                'percentage': len(outliers) / len(X) * 100 if len(X) > 0 else 0
+            }
+
+        return self
+
+    def transform(self, X):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        X_transformed = X.copy()
+
+        for col in X_transformed.select_dtypes(include=[np.number]).columns:
+            if col in self.outlier_bounds_:
+                lower_bound, upper_bound = self.outlier_bounds_[col]
+
+                if self.strategy == 'clip':
+                    X_transformed[col] = X_transformed[col].clip(lower_bound, upper_bound)
+                elif self.strategy == 'remove':
+                    # Mark outliers as NaN (will be handled by imputer)
+                    mask = (X_transformed[col] < lower_bound) | (X_transformed[col] > upper_bound)
+                    X_transformed.loc[mask, col] = np.nan
+                elif self.strategy == 'transform':
+                    # Log transform for positive values
+                    if (X_transformed[col] > 0).all():
+                        X_transformed[col] = np.log1p(X_transformed[col])
+
+        return X_transformed
+
+    def _detect_outliers_for_column(self, series, col_name):
+        """Detect outliers for a specific column."""
+        if col_name not in self.outlier_bounds_:
+            return []
+
+        lower_bound, upper_bound = self.outlier_bounds_[col_name]
+        outliers = series[(series < lower_bound) | (series > upper_bound)]
+        return outliers.index.tolist()
+
+    def get_outlier_report(self):
+        """Get a report of outlier detection results."""
+        return self.outlier_stats_.copy()
 
 
 class AutoPreprocessor:
@@ -77,6 +162,7 @@ class AutoPreprocessor:
         self.feature_names_out = None
         self.dropped_columns = []
         self.label_encoder = None
+        self.outlier_handler = None
         self.preprocessing_report = {}
         self.is_fitted = False
     
@@ -286,7 +372,23 @@ class AutoPreprocessor:
         if numeric_columns:
             numeric_steps = []
 
-            # Add missing value handling
+            # Add outlier handling (before imputation and scaling)
+            if self.handle_outliers:
+                # Extract threshold from outlier method
+                if self.outlier_method == 'iqr':
+                    outlier_threshold = 1.5
+                elif self.outlier_method == 'zscore':
+                    outlier_threshold = 3.0
+                else:
+                    outlier_threshold = 1.5  # default
+
+                numeric_steps.append(('outlier_handler', OutlierHandler(
+                    method=self.outlier_method,
+                    threshold=outlier_threshold,
+                    strategy='clip'  # Default to clipping outliers
+                )))
+
+            # Add missing value handling (after outlier handling)
             if self.handle_missing:
                 numeric_steps.append(('imputer', SimpleImputer(strategy='median')))
 
@@ -354,6 +456,11 @@ class AutoPreprocessor:
             'missing_value_strategy': {
                 'numeric': 'median imputation' if self.handle_missing else 'none',
                 'categorical': 'constant imputation (_missing_)' if self.handle_missing else 'none'
+            },
+            'outlier_handling': {
+                'enabled': self.handle_outliers,
+                'method': self.outlier_method if self.handle_outliers else 'none',
+                'strategy': 'clip' if self.handle_outliers else 'none'
             },
             'scaling_strategy': {
                 'numeric': self.scaling_strategy
