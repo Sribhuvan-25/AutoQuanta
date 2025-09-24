@@ -380,6 +380,230 @@ class FeatureEngineer(BaseEstimator, TransformerMixin):
         return self.feature_names_out_
 
 
+class DataValidator(BaseEstimator, TransformerMixin):
+    """Data validation and cleaning transformer."""
+
+    def __init__(self,
+                 remove_duplicates: bool = True,
+                 fix_data_types: bool = True,
+                 handle_mixed_types: bool = True,
+                 remove_constant_features: bool = True,
+                 constant_threshold: float = 0.95,
+                 remove_high_missing: bool = True,
+                 missing_threshold: float = 0.8):
+        """
+        Initialize data validator.
+
+        Args:
+            remove_duplicates: Remove duplicate rows
+            fix_data_types: Auto-fix data type inconsistencies
+            handle_mixed_types: Handle mixed data types in columns
+            remove_constant_features: Remove features with little variance
+            constant_threshold: Threshold for constant feature removal (0.95 = 95% same values)
+            remove_high_missing: Remove columns with too many missing values
+            missing_threshold: Threshold for high missing value removal (0.8 = 80% missing)
+        """
+        self.remove_duplicates = remove_duplicates
+        self.fix_data_types = fix_data_types
+        self.handle_mixed_types = handle_mixed_types
+        self.remove_constant_features = remove_constant_features
+        self.constant_threshold = constant_threshold
+        self.remove_high_missing = remove_high_missing
+        self.missing_threshold = missing_threshold
+
+        # Will be set during fit
+        self.columns_to_drop_ = []
+        self.dtype_fixes_ = {}
+        self.validation_report_ = {}
+        self.duplicate_count_ = 0
+
+    def fit(self, X, y=None):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        self.validation_report_ = {
+            'original_shape': X.shape,
+            'issues_found': [],
+            'fixes_applied': [],
+            'columns_dropped': [],
+            'data_quality_score': 0.0
+        }
+
+        # Check for duplicates
+        if self.remove_duplicates:
+            self.duplicate_count_ = X.duplicated().sum()
+            if self.duplicate_count_ > 0:
+                self.validation_report_['issues_found'].append(f'Found {self.duplicate_count_} duplicate rows')
+                self.validation_report_['fixes_applied'].append('Duplicate rows will be removed')
+
+        # Check for mixed data types and fix them
+        if self.fix_data_types or self.handle_mixed_types:
+            self.dtype_fixes_ = self._analyze_data_types(X)
+
+        # Identify constant/near-constant features
+        if self.remove_constant_features:
+            constant_cols = self._identify_constant_features(X)
+            self.columns_to_drop_.extend(constant_cols)
+            if constant_cols:
+                self.validation_report_['issues_found'].append(f'Found {len(constant_cols)} constant/near-constant features')
+                self.validation_report_['columns_dropped'].extend(constant_cols)
+
+        # Identify high missing value columns
+        if self.remove_high_missing:
+            high_missing_cols = self._identify_high_missing_columns(X)
+            self.columns_to_drop_.extend(high_missing_cols)
+            if high_missing_cols:
+                self.validation_report_['issues_found'].append(f'Found {len(high_missing_cols)} columns with >={self.missing_threshold*100}% missing values')
+                self.validation_report_['columns_dropped'].extend(high_missing_cols)
+
+        # Calculate data quality score
+        self.validation_report_['data_quality_score'] = self._calculate_quality_score(X)
+
+        return self
+
+    def transform(self, X):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        X_cleaned = X.copy()
+
+        # Remove duplicates
+        if self.remove_duplicates and self.duplicate_count_ > 0:
+            X_cleaned = X_cleaned.drop_duplicates()
+
+        # Fix data types
+        if self.dtype_fixes_:
+            for col, dtype_info in self.dtype_fixes_.items():
+                if col in X_cleaned.columns:
+                    X_cleaned[col] = self._apply_dtype_fix(X_cleaned[col], dtype_info)
+
+        # Drop problematic columns
+        if self.columns_to_drop_:
+            X_cleaned = X_cleaned.drop(columns=self.columns_to_drop_, errors='ignore')
+
+        return X_cleaned
+
+    def _analyze_data_types(self, X):
+        """Analyze and suggest data type fixes."""
+        dtype_fixes = {}
+
+        for col in X.columns:
+            series = X[col]
+
+            # Skip if already numeric
+            if pd.api.types.is_numeric_dtype(series):
+                continue
+
+            # Check if string column can be converted to numeric
+            if series.dtype == 'object':
+                # Try to convert to numeric
+                numeric_series = pd.to_numeric(series, errors='coerce')
+                non_null_original = series.notna().sum()
+                non_null_converted = numeric_series.notna().sum()
+
+                # If we can convert most values (>80%), suggest numeric conversion
+                conversion_rate = non_null_converted / non_null_original if non_null_original > 0 else 0
+                if conversion_rate > 0.8:
+                    dtype_fixes[col] = {
+                        'original_dtype': str(series.dtype),
+                        'suggested_dtype': 'numeric',
+                        'conversion_rate': conversion_rate,
+                        'fix_method': 'to_numeric'
+                    }
+                # Check if it's a datetime
+                elif self._is_datetime_column(series):
+                    dtype_fixes[col] = {
+                        'original_dtype': str(series.dtype),
+                        'suggested_dtype': 'datetime',
+                        'fix_method': 'to_datetime'
+                    }
+
+        return dtype_fixes
+
+    def _is_datetime_column(self, series):
+        """Check if a column contains datetime-like strings."""
+        sample_size = min(100, len(series))
+        sample = series.dropna().head(sample_size)
+
+        datetime_count = 0
+        for val in sample:
+            try:
+                pd.to_datetime(val)
+                datetime_count += 1
+            except:
+                continue
+
+        # If >50% of sample values can be parsed as datetime
+        return datetime_count / len(sample) > 0.5 if len(sample) > 0 else False
+
+    def _apply_dtype_fix(self, series, dtype_info):
+        """Apply data type fix to a series."""
+        try:
+            if dtype_info['fix_method'] == 'to_numeric':
+                return pd.to_numeric(series, errors='coerce')
+            elif dtype_info['fix_method'] == 'to_datetime':
+                return pd.to_datetime(series, errors='coerce')
+        except:
+            # If conversion fails, return original
+            pass
+
+        return series
+
+    def _identify_constant_features(self, X):
+        """Identify columns with little variance."""
+        constant_columns = []
+
+        for col in X.columns:
+            if pd.api.types.is_numeric_dtype(X[col]):
+                # For numeric columns, check if values are nearly constant
+                unique_ratio = X[col].nunique() / len(X[col])
+                if unique_ratio < (1 - self.constant_threshold):
+                    constant_columns.append(col)
+            else:
+                # For categorical columns, check if one value dominates
+                if len(X[col]) > 0:
+                    value_counts = X[col].value_counts()
+                    if len(value_counts) > 0:
+                        max_frequency = value_counts.iloc[0] / len(X[col])
+                        if max_frequency >= self.constant_threshold:
+                            constant_columns.append(col)
+
+        return constant_columns
+
+    def _identify_high_missing_columns(self, X):
+        """Identify columns with high missing value rates."""
+        high_missing_columns = []
+
+        for col in X.columns:
+            missing_rate = X[col].isnull().sum() / len(X[col])
+            if missing_rate >= self.missing_threshold:
+                high_missing_columns.append(col)
+
+        return high_missing_columns
+
+    def _calculate_quality_score(self, X):
+        """Calculate overall data quality score (0-1)."""
+        total_cells = X.shape[0] * X.shape[1]
+        missing_cells = X.isnull().sum().sum()
+        duplicate_rows = X.duplicated().sum()
+
+        # Basic quality metrics
+        missing_penalty = (missing_cells / total_cells) * 0.4  # 40% weight for missing values
+        duplicate_penalty = (duplicate_rows / X.shape[0]) * 0.2  # 20% weight for duplicates
+        constant_penalty = len(self.columns_to_drop_) / X.shape[1] * 0.2  # 20% weight for constant features
+
+        # Data type consistency (remaining 20%)
+        dtype_issues = len(self.dtype_fixes_)
+        dtype_penalty = min(dtype_issues / X.shape[1], 1.0) * 0.2
+
+        quality_score = 1.0 - (missing_penalty + duplicate_penalty + constant_penalty + dtype_penalty)
+        return max(0.0, min(1.0, quality_score))
+
+    def get_validation_report(self):
+        """Get detailed validation report."""
+        return self.validation_report_.copy()
+
+
 class AutoPreprocessor:
     """
     Automatic preprocessing pipeline for tabular data.
