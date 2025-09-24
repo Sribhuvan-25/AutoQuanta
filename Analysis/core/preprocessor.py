@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 from typing import Dict, List, Any, Optional, Tuple, Union
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.preprocessing import OneHotEncoder, LabelEncoder, StandardScaler, MinMaxScaler, RobustScaler, OrdinalEncoder
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder, StandardScaler, MinMaxScaler, RobustScaler, OrdinalEncoder, PolynomialFeatures, KBinsDiscretizer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
@@ -206,6 +206,401 @@ class FrequencyEncoder(BaseEstimator, TransformerMixin):
 
         return X_encoded.values
 
+class FeatureEngineer(BaseEstimator, TransformerMixin):
+    """Feature engineering transformer for creating new features."""
+
+    def __init__(self,
+                 create_polynomial: bool = False,
+                 polynomial_degree: int = 2,
+                 create_interactions: bool = False,
+                 interaction_pairs: Optional[List[Tuple[str, str]]] = None,
+                 create_binning: bool = False,
+                 binning_strategy: str = 'quantile',
+                 n_bins: int = 5):
+        """
+        Initialize feature engineer.
+
+        Args:
+            create_polynomial: Create polynomial features
+            polynomial_degree: Degree for polynomial features
+            create_interactions: Create interaction terms
+            interaction_pairs: Specific column pairs for interactions (auto-detected if None)
+            create_binning: Create binned versions of continuous features
+            binning_strategy: 'uniform', 'quantile', or 'kmeans'
+            n_bins: Number of bins for discretization
+        """
+        self.create_polynomial = create_polynomial
+        self.polynomial_degree = polynomial_degree
+        self.create_interactions = create_interactions
+        self.interaction_pairs = interaction_pairs
+        self.create_binning = create_binning
+        self.binning_strategy = binning_strategy
+        self.n_bins = n_bins
+
+        # Will be set during fit
+        self.feature_names_in_ = None
+        self.feature_names_out_ = None
+        self.numeric_columns_ = None
+        self.poly_transformer_ = None
+        self.binning_transformers_ = {}
+        self.selected_interactions_ = []
+
+    def fit(self, X, y=None):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        self.feature_names_in_ = list(X.columns)
+        self.numeric_columns_ = list(X.select_dtypes(include=[np.number]).columns)
+
+        # Fit polynomial features if requested
+        if self.create_polynomial and len(self.numeric_columns_) > 0:
+            self.poly_transformer_ = PolynomialFeatures(
+                degree=self.polynomial_degree,
+                include_bias=False,
+                interaction_only=False
+            )
+            X_numeric = X[self.numeric_columns_]
+            self.poly_transformer_.fit(X_numeric)
+
+        # Determine interaction pairs
+        if self.create_interactions:
+            if self.interaction_pairs is None:
+                # Auto-select important interaction pairs (limit to avoid explosion)
+                self.selected_interactions_ = self._select_interaction_pairs(X, y)
+            else:
+                self.selected_interactions_ = [
+                    (col1, col2) for col1, col2 in self.interaction_pairs
+                    if col1 in X.columns and col2 in X.columns
+                ]
+
+        # Fit binning transformers
+        if self.create_binning:
+            for col in self.numeric_columns_:
+                if X[col].nunique() > self.n_bins:  # Only bin if enough unique values
+                    binning_transformer = KBinsDiscretizer(
+                        n_bins=self.n_bins,
+                        encode='ordinal',
+                        strategy=self.binning_strategy
+                    )
+                    binning_transformer.fit(X[[col]])
+                    self.binning_transformers_[col] = binning_transformer
+
+        # Generate output feature names
+        self.feature_names_out_ = self._generate_feature_names(X)
+
+        return self
+
+    def transform(self, X):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X, columns=self.feature_names_in_)
+
+        X_engineered = X.copy()
+
+        # Add polynomial features
+        if self.create_polynomial and self.poly_transformer_ is not None:
+            X_numeric = X[self.numeric_columns_]
+            poly_features = self.poly_transformer_.transform(X_numeric)
+            poly_feature_names = self.poly_transformer_.get_feature_names_out(self.numeric_columns_)
+
+            # Add polynomial features (excluding original features which are duplicated)
+            for i, feature_name in enumerate(poly_feature_names):
+                if feature_name not in self.numeric_columns_:  # Skip original features
+                    X_engineered[f'poly_{feature_name}'] = poly_features[:, i]
+
+        # Add interaction features
+        if self.create_interactions:
+            for col1, col2 in self.selected_interactions_:
+                if col1 in X.columns and col2 in X.columns:
+                    # Create interaction term
+                    interaction_name = f'{col1}_x_{col2}'
+                    if pd.api.types.is_numeric_dtype(X[col1]) and pd.api.types.is_numeric_dtype(X[col2]):
+                        X_engineered[interaction_name] = X[col1] * X[col2]
+                    else:
+                        # For categorical interactions, create combined categories
+                        X_engineered[interaction_name] = X[col1].astype(str) + '_' + X[col2].astype(str)
+
+        # Add binned features
+        if self.create_binning:
+            for col, transformer in self.binning_transformers_.items():
+                if col in X.columns:
+                    binned_values = transformer.transform(X[[col]])
+                    X_engineered[f'{col}_binned'] = binned_values.flatten()
+
+        return X_engineered
+
+    def _select_interaction_pairs(self, X, y, max_pairs=10):
+        """Automatically select promising interaction pairs."""
+        numeric_cols = self.numeric_columns_
+        categorical_cols = [col for col in X.columns if col not in numeric_cols]
+
+        interaction_pairs = []
+
+        # Numeric x Numeric interactions (top correlations)
+        if len(numeric_cols) >= 2:
+            from itertools import combinations
+            num_pairs = list(combinations(numeric_cols, 2))
+            # Limit to avoid feature explosion
+            interaction_pairs.extend(num_pairs[:min(5, len(num_pairs))])
+
+        # Numeric x Categorical interactions (if any)
+        if len(numeric_cols) >= 1 and len(categorical_cols) >= 1:
+            # Add a few promising numeric-categorical pairs
+            for num_col in numeric_cols[:3]:  # Limit to top 3 numeric columns
+                for cat_col in categorical_cols[:2]:  # Limit to top 2 categorical
+                    interaction_pairs.append((num_col, cat_col))
+
+        return interaction_pairs[:max_pairs]  # Limit total interactions
+
+    def _generate_feature_names(self, X):
+        """Generate names for all output features."""
+        feature_names = list(X.columns)  # Start with original features
+
+        # Add polynomial feature names
+        if self.create_polynomial and self.poly_transformer_ is not None:
+            poly_names = self.poly_transformer_.get_feature_names_out(self.numeric_columns_)
+            for name in poly_names:
+                if name not in self.numeric_columns_:  # Skip duplicated original features
+                    feature_names.append(f'poly_{name}')
+
+        # Add interaction feature names
+        if self.create_interactions:
+            for col1, col2 in self.selected_interactions_:
+                feature_names.append(f'{col1}_x_{col2}')
+
+        # Add binned feature names
+        if self.create_binning:
+            for col in self.binning_transformers_.keys():
+                feature_names.append(f'{col}_binned')
+
+        return feature_names
+
+    def get_feature_names_out(self, input_features=None):
+        """Get output feature names."""
+        return self.feature_names_out_
+
+
+class DataValidator(BaseEstimator, TransformerMixin):
+    """Data validation and cleaning transformer."""
+
+    def __init__(self,
+                 remove_duplicates: bool = True,
+                 fix_data_types: bool = True,
+                 handle_mixed_types: bool = True,
+                 remove_constant_features: bool = True,
+                 constant_threshold: float = 0.95,
+                 remove_high_missing: bool = True,
+                 missing_threshold: float = 0.8):
+        """
+        Initialize data validator.
+
+        Args:
+            remove_duplicates: Remove duplicate rows
+            fix_data_types: Auto-fix data type inconsistencies
+            handle_mixed_types: Handle mixed data types in columns
+            remove_constant_features: Remove features with little variance
+            constant_threshold: Threshold for constant feature removal (0.95 = 95% same values)
+            remove_high_missing: Remove columns with too many missing values
+            missing_threshold: Threshold for high missing value removal (0.8 = 80% missing)
+        """
+        self.remove_duplicates = remove_duplicates
+        self.fix_data_types = fix_data_types
+        self.handle_mixed_types = handle_mixed_types
+        self.remove_constant_features = remove_constant_features
+        self.constant_threshold = constant_threshold
+        self.remove_high_missing = remove_high_missing
+        self.missing_threshold = missing_threshold
+
+        # Will be set during fit
+        self.columns_to_drop_ = []
+        self.dtype_fixes_ = {}
+        self.validation_report_ = {}
+        self.duplicate_count_ = 0
+
+    def fit(self, X, y=None):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        self.validation_report_ = {
+            'original_shape': X.shape,
+            'issues_found': [],
+            'fixes_applied': [],
+            'columns_dropped': [],
+            'data_quality_score': 0.0
+        }
+
+        # Check for duplicates
+        if self.remove_duplicates:
+            self.duplicate_count_ = X.duplicated().sum()
+            if self.duplicate_count_ > 0:
+                self.validation_report_['issues_found'].append(f'Found {self.duplicate_count_} duplicate rows')
+                self.validation_report_['fixes_applied'].append('Duplicate rows will be removed')
+
+        # Check for mixed data types and fix them
+        if self.fix_data_types or self.handle_mixed_types:
+            self.dtype_fixes_ = self._analyze_data_types(X)
+
+        # Identify constant/near-constant features
+        if self.remove_constant_features:
+            constant_cols = self._identify_constant_features(X)
+            self.columns_to_drop_.extend(constant_cols)
+            if constant_cols:
+                self.validation_report_['issues_found'].append(f'Found {len(constant_cols)} constant/near-constant features')
+                self.validation_report_['columns_dropped'].extend(constant_cols)
+
+        # Identify high missing value columns
+        if self.remove_high_missing:
+            high_missing_cols = self._identify_high_missing_columns(X)
+            self.columns_to_drop_.extend(high_missing_cols)
+            if high_missing_cols:
+                self.validation_report_['issues_found'].append(f'Found {len(high_missing_cols)} columns with >={self.missing_threshold*100}% missing values')
+                self.validation_report_['columns_dropped'].extend(high_missing_cols)
+
+        # Calculate data quality score
+        self.validation_report_['data_quality_score'] = self._calculate_quality_score(X)
+
+        return self
+
+    def transform(self, X):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+
+        X_cleaned = X.copy()
+
+        # Remove duplicates
+        if self.remove_duplicates and self.duplicate_count_ > 0:
+            X_cleaned = X_cleaned.drop_duplicates()
+
+        # Fix data types
+        if self.dtype_fixes_:
+            for col, dtype_info in self.dtype_fixes_.items():
+                if col in X_cleaned.columns:
+                    X_cleaned[col] = self._apply_dtype_fix(X_cleaned[col], dtype_info)
+
+        # Drop problematic columns
+        if self.columns_to_drop_:
+            X_cleaned = X_cleaned.drop(columns=self.columns_to_drop_, errors='ignore')
+
+        return X_cleaned
+
+    def _analyze_data_types(self, X):
+        """Analyze and suggest data type fixes."""
+        dtype_fixes = {}
+
+        for col in X.columns:
+            series = X[col]
+
+            # Skip if already numeric
+            if pd.api.types.is_numeric_dtype(series):
+                continue
+
+            # Check if string column can be converted to numeric
+            if series.dtype == 'object':
+                # Try to convert to numeric
+                numeric_series = pd.to_numeric(series, errors='coerce')
+                non_null_original = series.notna().sum()
+                non_null_converted = numeric_series.notna().sum()
+
+                # If we can convert most values (>80%), suggest numeric conversion
+                conversion_rate = non_null_converted / non_null_original if non_null_original > 0 else 0
+                if conversion_rate > 0.8:
+                    dtype_fixes[col] = {
+                        'original_dtype': str(series.dtype),
+                        'suggested_dtype': 'numeric',
+                        'conversion_rate': conversion_rate,
+                        'fix_method': 'to_numeric'
+                    }
+                # Check if it's a datetime
+                elif self._is_datetime_column(series):
+                    dtype_fixes[col] = {
+                        'original_dtype': str(series.dtype),
+                        'suggested_dtype': 'datetime',
+                        'fix_method': 'to_datetime'
+                    }
+
+        return dtype_fixes
+
+    def _is_datetime_column(self, series):
+        """Check if a column contains datetime-like strings."""
+        sample_size = min(100, len(series))
+        sample = series.dropna().head(sample_size)
+
+        datetime_count = 0
+        for val in sample:
+            try:
+                pd.to_datetime(val)
+                datetime_count += 1
+            except:
+                continue
+
+        # If >50% of sample values can be parsed as datetime
+        return datetime_count / len(sample) > 0.5 if len(sample) > 0 else False
+
+    def _apply_dtype_fix(self, series, dtype_info):
+        """Apply data type fix to a series."""
+        try:
+            if dtype_info['fix_method'] == 'to_numeric':
+                return pd.to_numeric(series, errors='coerce')
+            elif dtype_info['fix_method'] == 'to_datetime':
+                return pd.to_datetime(series, errors='coerce')
+        except:
+            # If conversion fails, return original
+            pass
+
+        return series
+
+    def _identify_constant_features(self, X):
+        """Identify columns with little variance."""
+        constant_columns = []
+
+        for col in X.columns:
+            if pd.api.types.is_numeric_dtype(X[col]):
+                # For numeric columns, check if values are nearly constant
+                unique_ratio = X[col].nunique() / len(X[col])
+                if unique_ratio < (1 - self.constant_threshold):
+                    constant_columns.append(col)
+            else:
+                # For categorical columns, check if one value dominates
+                if len(X[col]) > 0:
+                    value_counts = X[col].value_counts()
+                    if len(value_counts) > 0:
+                        max_frequency = value_counts.iloc[0] / len(X[col])
+                        if max_frequency >= self.constant_threshold:
+                            constant_columns.append(col)
+
+        return constant_columns
+
+    def _identify_high_missing_columns(self, X):
+        """Identify columns with high missing value rates."""
+        high_missing_columns = []
+
+        for col in X.columns:
+            missing_rate = X[col].isnull().sum() / len(X[col])
+            if missing_rate >= self.missing_threshold:
+                high_missing_columns.append(col)
+
+        return high_missing_columns
+
+    def _calculate_quality_score(self, X):
+        """Calculate overall data quality score (0-1)."""
+        total_cells = X.shape[0] * X.shape[1]
+        missing_cells = X.isnull().sum().sum()
+        duplicate_rows = X.duplicated().sum()
+
+        # Basic quality metrics
+        missing_penalty = (missing_cells / total_cells) * 0.4  # 40% weight for missing values
+        duplicate_penalty = (duplicate_rows / X.shape[0]) * 0.2  # 20% weight for duplicates
+        constant_penalty = len(self.columns_to_drop_) / X.shape[1] * 0.2  # 20% weight for constant features
+
+        # Data type consistency (remaining 20%)
+        dtype_issues = len(self.dtype_fixes_)
+        dtype_penalty = min(dtype_issues / X.shape[1], 1.0) * 0.2
+
+        quality_score = 1.0 - (missing_penalty + duplicate_penalty + constant_penalty + dtype_penalty)
+        return max(0.0, min(1.0, quality_score))
+
+    def get_validation_report(self):
+        """Get detailed validation report."""
+        return self.validation_report_.copy()
 
 class AutoPreprocessor:
     """
@@ -222,7 +617,12 @@ class AutoPreprocessor:
                  scaling_strategy: str = 'standard',
                  handle_outliers: bool = True,
                  outlier_method: str = 'iqr',
-                 categorical_encoding: str = 'onehot'):
+                 categorical_encoding: str = 'onehot',
+                 enable_feature_engineering: bool = False,
+                 create_polynomial: bool = False,
+                 polynomial_degree: int = 2,
+                 create_interactions: bool = False,
+                 create_binning: bool = False):
         
         self.target_column = target_column
         self.task_type = task_type
@@ -233,6 +633,11 @@ class AutoPreprocessor:
         self.handle_outliers = handle_outliers
         self.outlier_method = outlier_method
         self.categorical_encoding = categorical_encoding
+        self.enable_feature_engineering = enable_feature_engineering
+        self.create_polynomial = create_polynomial
+        self.polynomial_degree = polynomial_degree
+        self.create_interactions = create_interactions
+        self.create_binning = create_binning
         
         # Will be set during fit
         self.pipeline = None
@@ -240,6 +645,7 @@ class AutoPreprocessor:
         self.dropped_columns = []
         self.label_encoder = None
         self.outlier_handler = None
+        self.feature_engineer = None
         self.preprocessing_report = {}
         self.is_fitted = False
     
@@ -262,8 +668,23 @@ class AutoPreprocessor:
             
             # Remove dropped columns
             X_clean = X.drop(columns=self.dropped_columns, errors='ignore')
-            
-            # Separate column types
+
+            # Apply feature engineering before separation (if enabled)
+            if self.enable_feature_engineering:
+                self.feature_engineer = FeatureEngineer(
+                    create_polynomial=self.create_polynomial,
+                    polynomial_degree=self.polynomial_degree,
+                    create_interactions=self.create_interactions,
+                    create_binning=self.create_binning
+                )
+                self.feature_engineer.fit(X_clean, y)
+                X_clean = self.feature_engineer.transform(X_clean)
+
+                # Convert back to DataFrame if needed
+                if not isinstance(X_clean, pd.DataFrame):
+                    X_clean = pd.DataFrame(X_clean, columns=self.feature_engineer.get_feature_names_out())
+
+            # Separate column types (after feature engineering)
             numeric_columns, categorical_columns = self._separate_column_types(X_clean)
             
             # Filter categorical columns by cardinality
@@ -329,17 +750,25 @@ class AutoPreprocessor:
     def transform(self, X: pd.DataFrame) -> np.ndarray:
         if not self.is_fitted:
             raise ValueError("Preprocessor must be fitted before transforming")
-        
+
         # Make a copy to avoid modifying the original
         X_copy = X.copy()
-        
+
         # Remove target column if present
         if self.target_column in X_copy.columns:
             X_copy = X_copy.drop(columns=[self.target_column])
-        
+
+        # Apply feature engineering first (if enabled)
+        if self.enable_feature_engineering and self.feature_engineer is not None:
+            X_copy = self.feature_engineer.transform(X_copy)
+
+            # Convert back to DataFrame if needed
+            if not isinstance(X_copy, pd.DataFrame):
+                X_copy = pd.DataFrame(X_copy, columns=self.feature_engineer.get_feature_names_out())
+
         if self.pipeline is None:
             return X_copy.values
-        
+
         return self.pipeline.transform(X_copy)
     
     def transform_target(self, y: pd.Series) -> np.ndarray:
@@ -572,6 +1001,13 @@ class AutoPreprocessor:
             },
             'encoding_strategy': {
                 'categorical': f'{self.categorical_encoding} encoding (max cardinality: {self.max_cardinality})'
+            },
+            'feature_engineering': {
+                'enabled': self.enable_feature_engineering,
+                'polynomial_features': self.create_polynomial,
+                'polynomial_degree': self.polynomial_degree if self.create_polynomial else None,
+                'interaction_features': self.create_interactions,
+                'binning_features': self.create_binning
             },
             'target_preprocessing': {
                 'classification': 'label encoding' if self.task_type == 'classification' else 'none',
