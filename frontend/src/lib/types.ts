@@ -23,6 +23,37 @@ export interface DataProfile {
   dtypes_summary: Record<string, number>;
 }
 
+export interface PreprocessingConfig {
+  // Data Validation
+  enable_validation: boolean;
+  remove_duplicates: boolean;
+  fix_data_types: boolean;
+  remove_constant_features: boolean;
+  remove_high_missing: boolean;
+
+  // Missing Values
+  handle_missing: boolean;
+  missing_strategy: 'median' | 'mean' | 'mode' | 'knn' | 'iterative';
+
+  // Outlier Handling
+  handle_outliers: boolean;
+  outlier_method: 'iqr' | 'zscore';
+
+  // Feature Scaling
+  scaling_strategy: 'standard' | 'minmax' | 'robust' | 'none';
+
+  // Categorical Encoding
+  categorical_encoding: 'onehot' | 'target' | 'ordinal' | 'frequency';
+  max_cardinality: number;
+
+  // Feature Engineering
+  enable_feature_engineering: boolean;
+  create_polynomial: boolean;
+  polynomial_degree: number;
+  create_interactions: boolean;
+  create_binning: boolean;
+}
+
 export interface TrainingConfig {
   target_column: string;
   task_type: 'classification' | 'regression';
@@ -30,6 +61,7 @@ export interface TrainingConfig {
   cv_folds: number;
   random_seed: number;
   models_to_try: string[];
+  preprocessing?: PreprocessingConfig;
 }
 
 export interface FoldResult {

@@ -6,7 +6,8 @@ import { cn } from '@/lib/utils';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { setTrainingConfig, clearError } from '@/store/slices/trainingSlice';
 import { selectCurrentDataset, selectAdvancedColumns } from '@/store/slices/dataSlice';
-import type { TrainingConfig } from '@/lib/types';
+import type { TrainingConfig, PreprocessingConfig } from '@/lib/types';
+import { PreprocessingConfigPanel, DEFAULT_PREPROCESSING_CONFIG } from './PreprocessingConfigPanel';
 import { 
   Settings, 
   Target, 
@@ -44,10 +45,12 @@ export function TrainingConfig({ onStartTraining, isTraining, className }: Train
     test_size: 0.2,
     cv_folds: 5,
     random_seed: 42,
-    models_to_try: ['random_forest', 'gradient_boosting']
+    models_to_try: ['random_forest', 'gradient_boosting'],
+    preprocessing: DEFAULT_PREPROCESSING_CONFIG
   });
-  
+
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showPreprocessing, setShowPreprocessing] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Get numeric and categorical columns for target selection
@@ -301,6 +304,27 @@ export function TrainingConfig({ onStartTraining, isTraining, className }: Train
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Preprocessing Configuration */}
+      <div className="border-t pt-4">
+        <button
+          onClick={() => setShowPreprocessing(!showPreprocessing)}
+          className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+        >
+          {showPreprocessing ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          Preprocessing Configuration
+          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">Optional</span>
+        </button>
+
+        {showPreprocessing && (
+          <div className="mt-4">
+            <PreprocessingConfigPanel
+              config={config.preprocessing || DEFAULT_PREPROCESSING_CONFIG}
+              onChange={(preprocessingConfig) => setConfig(prev => ({ ...prev, preprocessing: preprocessingConfig }))}
+            />
           </div>
         )}
       </div>
