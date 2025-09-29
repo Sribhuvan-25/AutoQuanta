@@ -8,7 +8,9 @@ import numpy as np
 from typing import Dict, List, Any, Optional, Tuple, Union
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder, StandardScaler, MinMaxScaler, RobustScaler, OrdinalEncoder, PolynomialFeatures, KBinsDiscretizer
-from sklearn.impute import SimpleImputer
+from sklearn.impute import SimpleImputer, KNNImputer
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import IterativeImputer
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from scipy import stats
@@ -614,6 +616,7 @@ class AutoPreprocessor:
                  max_cardinality: int = None,
                  drop_id_columns: bool = True,
                  handle_missing: bool = True,
+                 missing_strategy: str = 'median',
                  scaling_strategy: str = 'standard',
                  handle_outliers: bool = True,
                  outlier_method: str = 'iqr',
@@ -622,13 +625,19 @@ class AutoPreprocessor:
                  create_polynomial: bool = False,
                  polynomial_degree: int = 2,
                  create_interactions: bool = False,
-                 create_binning: bool = False):
+                 create_binning: bool = False,
+                 enable_validation: bool = True,
+                 remove_duplicates: bool = True,
+                 fix_data_types: bool = True,
+                 remove_constant_features: bool = True,
+                 remove_high_missing: bool = True):
         
         self.target_column = target_column
         self.task_type = task_type
         self.max_cardinality = max_cardinality or DEFAULT_CONFIG['max_cardinality']
         self.drop_id_columns = drop_id_columns
         self.handle_missing = handle_missing
+        self.missing_strategy = missing_strategy
         self.scaling_strategy = scaling_strategy
         self.handle_outliers = handle_outliers
         self.outlier_method = outlier_method
@@ -638,7 +647,12 @@ class AutoPreprocessor:
         self.polynomial_degree = polynomial_degree
         self.create_interactions = create_interactions
         self.create_binning = create_binning
-        
+        self.enable_validation = enable_validation
+        self.remove_duplicates = remove_duplicates
+        self.fix_data_types = fix_data_types
+        self.remove_constant_features = remove_constant_features
+        self.remove_high_missing = remove_high_missing
+
         # Will be set during fit
         self.pipeline = None
         self.feature_names_out = None
@@ -646,6 +660,7 @@ class AutoPreprocessor:
         self.label_encoder = None
         self.outlier_handler = None
         self.feature_engineer = None
+        self.data_validator = None
         self.preprocessing_report = {}
         self.is_fitted = False
     
@@ -662,10 +677,25 @@ class AutoPreprocessor:
             if self.task_type is None:
                 self.task_type = detect_task_type(y)
                 logger.info(f"Auto-detected task type: {self.task_type}")
-            
+
+            # Apply data validation and cleaning first (if enabled)
+            if self.enable_validation:
+                self.data_validator = DataValidator(
+                    remove_duplicates=self.remove_duplicates,
+                    fix_data_types=self.fix_data_types,
+                    remove_constant_features=self.remove_constant_features,
+                    remove_high_missing=self.remove_high_missing
+                )
+                self.data_validator.fit(X, y)
+                X = self.data_validator.transform(X)
+
+                # Convert back to DataFrame if needed
+                if not isinstance(X, pd.DataFrame):
+                    X = pd.DataFrame(X)
+
             # Identify columns to drop
             self.dropped_columns = self._identify_columns_to_drop(X)
-            
+
             # Remove dropped columns
             X_clean = X.drop(columns=self.dropped_columns, errors='ignore')
 
@@ -896,7 +926,19 @@ class AutoPreprocessor:
 
             # Add missing value handling (after outlier handling)
             if self.handle_missing:
-                numeric_steps.append(('imputer', SimpleImputer(strategy='median')))
+                if self.missing_strategy == 'median':
+                    numeric_steps.append(('imputer', SimpleImputer(strategy='median')))
+                elif self.missing_strategy == 'mean':
+                    numeric_steps.append(('imputer', SimpleImputer(strategy='mean')))
+                elif self.missing_strategy == 'mode':
+                    numeric_steps.append(('imputer', SimpleImputer(strategy='most_frequent')))
+                elif self.missing_strategy == 'knn':
+                    numeric_steps.append(('imputer', KNNImputer(n_neighbors=5)))
+                elif self.missing_strategy == 'iterative':
+                    numeric_steps.append(('imputer', IterativeImputer(random_state=42, max_iter=10)))
+                else:
+                    # Default to median
+                    numeric_steps.append(('imputer', SimpleImputer(strategy='median')))
 
             # Add scaling
             if self.scaling_strategy == 'standard':
@@ -988,8 +1030,16 @@ class AutoPreprocessor:
             'numeric_columns': numeric_columns,
             'categorical_columns': categorical_columns,
             'missing_value_strategy': {
-                'numeric': 'median imputation' if self.handle_missing else 'none',
+                'numeric': f'{self.missing_strategy} imputation' if self.handle_missing else 'none',
                 'categorical': 'constant imputation (_missing_)' if self.handle_missing else 'none'
+            },
+            'data_validation': {
+                'enabled': self.enable_validation,
+                'remove_duplicates': self.remove_duplicates,
+                'fix_data_types': self.fix_data_types,
+                'remove_constant_features': self.remove_constant_features,
+                'remove_high_missing': self.remove_high_missing,
+                'validation_report': self.data_validator.get_validation_report() if self.data_validator else None
             },
             'outlier_handling': {
                 'enabled': self.handle_outliers,
