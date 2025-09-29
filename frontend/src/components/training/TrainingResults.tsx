@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { TrainingResults, ModelPerformance } from '@/lib/types';
+import { PreprocessingReport } from './PreprocessingReport';
 
 interface TrainingResultsProps {
   results: TrainingResults | null;
@@ -439,6 +440,14 @@ export function TrainingResults({
                 </dl>
               </div>
             </div>
+
+            {/* Preprocessing Report */}
+            {results.preprocessing_report && (
+              <PreprocessingReport
+                report={results.preprocessing_report}
+                className="mt-0"
+              />
+            )}
 
             {/* Data Profile */}
             {results.data_profile && (

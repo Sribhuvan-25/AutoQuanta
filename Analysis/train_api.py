@@ -118,6 +118,7 @@ def serialize_training_results(results) -> Dict[str, Any]:
                 'models_to_try': results.training_config.models_to_try
             },
             'data_profile': None,  # Can be added if needed
+            'preprocessing_report': getattr(results, 'preprocessing_report', None),
             'cv_summary': results.cv_summary,
             'model_comparison': results.model_comparison,
             'prediction_analysis': results.prediction_analysis
@@ -384,6 +385,9 @@ def train_from_api(csv_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
         # Stage 3: Model Training (this will emit more detailed progress)
         emit_progress("training", 25, f"Starting training with {len(python_models)} models...")
         
+        # Extract preprocessing configuration if provided
+        preprocessing_config = config.get('preprocessing', None)
+
         # Call the training engine
         results = train_models(
             df=df,
@@ -392,7 +396,8 @@ def train_from_api(csv_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
             models_to_try=python_models,
             cv_folds=config.get('cv_folds', 5),
             test_size=config.get('test_size', 0.2),
-            random_seed=config.get('random_seed', 42)
+            random_seed=config.get('random_seed', 42),
+            preprocessing_config=preprocessing_config
         )
         
         # Stage 4: Results Processing
