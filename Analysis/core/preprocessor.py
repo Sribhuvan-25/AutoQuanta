@@ -208,7 +208,6 @@ class FrequencyEncoder(BaseEstimator, TransformerMixin):
 
         return X_encoded.values
 
-
 class FeatureEngineer(BaseEstimator, TransformerMixin):
     """Feature engineering transformer for creating new features."""
 
@@ -604,7 +603,6 @@ class DataValidator(BaseEstimator, TransformerMixin):
     def get_validation_report(self):
         """Get detailed validation report."""
         return self.validation_report_.copy()
-
 
 class AutoPreprocessor:
     """

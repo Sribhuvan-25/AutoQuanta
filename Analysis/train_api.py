@@ -69,6 +69,7 @@ def serialize_training_results(results) -> Dict[str, Any]:
                 'training_time': float(model.training_time),
                 'best_params': model.best_params,
                 'feature_importance': model.feature_importance or {},
+                'comprehensive_metrics': model.comprehensive_metrics or {},
                 'fold_results': []
             }
             
@@ -102,6 +103,7 @@ def serialize_training_results(results) -> Dict[str, Any]:
                 'std_score': float(best_model.std_score),
                 'fold_results': all_models[0]['fold_results'] if all_models else [],
                 'feature_importance': best_model.feature_importance or {},
+                'comprehensive_metrics': best_model.comprehensive_metrics or {},
                 'training_time': float(best_model.training_time),
                 'all_predictions': convert_numpy(best_model.all_predictions),
                 'all_actuals': convert_numpy(best_model.all_actuals)
