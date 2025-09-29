@@ -106,6 +106,7 @@ export interface TrainingResults {
   all_models: ModelTrainingResult[];
   training_config: TrainingConfig;
   data_profile: DataProfile;
+  preprocessing_report?: any;
   cv_summary: Record<string, unknown>;
   model_comparison: Record<string, unknown>;
   prediction_analysis: Record<string, unknown>;

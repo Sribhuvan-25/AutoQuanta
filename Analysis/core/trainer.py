@@ -102,6 +102,7 @@ class ModelTrainer:
                            target_column: str,
                            task_type: Optional[str] = None,
                            models_to_try: Optional[List[str]] = None,
+                           preprocessing_config: Optional[Dict[str, Any]] = None,
                            **kwargs) -> TrainingResults:
         # Create training config
         config = TrainingConfig(
@@ -110,22 +111,34 @@ class ModelTrainer:
             models_to_try=models_to_try or ['rf', 'lgbm', 'xgb'],
             **kwargs
         )
-        
+
         # Profile data
         from .profiler import DataProfiler
         profiler = DataProfiler()
         data_profile = profiler.profile_dataframe(df)
-        
-        # Preprocess data
-        preprocessor = AutoPreprocessor(target_column=target_column, task_type=config.task_type)
+
+        # Preprocess data with custom configuration if provided
+        if preprocessing_config:
+            preprocessor = AutoPreprocessor(
+                target_column=target_column,
+                task_type=config.task_type,
+                **preprocessing_config
+            )
+        else:
+            preprocessor = AutoPreprocessor(
+                target_column=target_column,
+                task_type=config.task_type
+            )
+
         X, y = preprocessor.fit_transform(df)
-        
+
         # Train models
         results = self.train(X, y, config, preprocessor.get_feature_names_out())
-        
-        # Add data profile to results
+
+        # Add data profile and preprocessing report to results
         results.data_profile = data_profile
-        
+        results.preprocessing_report = preprocessor.get_preprocessing_report()
+
         return results
     
     def _setup_cross_validation(self, y: np.ndarray, config: TrainingConfig):
