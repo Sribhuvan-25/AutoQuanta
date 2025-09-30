@@ -186,3 +186,48 @@ export interface ColumnTypeInfo {
   uniqueCount: number;
   sampleValues: string[];
 }
+
+// Prediction-related types
+export interface SavedModel {
+  model_id: string;
+  model_name: string;
+  model_path: string;
+  created_at: string;
+  training_config: TrainingConfig;
+  performance: {
+    score: number;
+    metrics: Record<string, number>;
+  };
+  feature_names: string[];
+  target_column: string;
+  task_type: 'classification' | 'regression';
+}
+
+export interface PredictionInput {
+  model_id: string;
+  input_type: 'single' | 'batch';
+  data?: Record<string, any>; // Single prediction - feature:value pairs
+  csv_file?: File; // Batch prediction - CSV file
+  csv_data?: string[][]; // Batch prediction - parsed CSV data
+}
+
+export interface PredictionResult {
+  predictions: number[];
+  probabilities?: number[][]; // For classification
+  feature_values?: Record<string, any>[]; // Input features for each prediction
+  prediction_metadata?: {
+    model_name: string;
+    model_version: string;
+    timestamp: string;
+    confidence_scores?: number[];
+  };
+}
+
+export interface PredictionState {
+  availableModels: SavedModel[];
+  selectedModel: SavedModel | null;
+  predictionInput: PredictionInput | null;
+  predictionResults: PredictionResult | null;
+  isPredicting: boolean;
+  error: string | null;
+}
