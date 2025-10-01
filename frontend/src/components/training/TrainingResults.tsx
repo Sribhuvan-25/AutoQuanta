@@ -17,6 +17,9 @@ import {
 import { Button } from '@/components/ui/button';
 import type { TrainingResults, ModelPerformance } from '@/lib/types';
 import { PreprocessingReport } from './PreprocessingReport';
+import { FeatureImportanceChart } from '@/components/charts/FeatureImportanceChart';
+import { ConfusionMatrixChart } from '@/components/charts/ConfusionMatrixChart';
+import { ModelComparisonChart } from '@/components/charts/ModelComparisonChart';
 
 interface TrainingResultsProps {
   results: TrainingResults | null;
@@ -36,7 +39,7 @@ export function TrainingResults({
   className 
 }: TrainingResultsProps) {
   const [expandedModel, setExpandedModel] = useState<string | null>(null);
-  const [selectedTab, setSelectedTab] = useState<'overview' | 'models' | 'details'>('overview');
+  const [selectedTab, setSelectedTab] = useState<'overview' | 'models' | 'details' | 'visualizations'>('overview');
 
   if (!results) {
     return null;
@@ -100,14 +103,15 @@ export function TrainingResults({
         <div className="flex items-center gap-1 mt-4">
           {[
             { key: 'overview', label: 'Overview', icon: BarChart3 },
-            { key: 'models', label: 'Model Comparison', icon: TrendingUp },
+            { key: 'visualizations', label: 'Visualizations', icon: TrendingUp },
+            { key: 'models', label: 'Model Comparison', icon: Eye },
             { key: 'details', label: 'Details', icon: Info }
           ].map((tab) => {
             const TabIcon = tab.icon;
             return (
               <button
                 key={tab.key}
-                onClick={() => setSelectedTab(tab.key as 'overview' | 'models' | 'details')}
+                onClick={() => setSelectedTab(tab.key as 'overview' | 'models' | 'details' | 'visualizations')}
                 className={cn(
                   'flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
                   selectedTab === tab.key
@@ -190,6 +194,44 @@ export function TrainingResults({
                 </p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Visualizations Tab */}
+        {selectedTab === 'visualizations' && (
+          <div className="space-y-6">
+            {/* Model Comparison Chart */}
+            <ModelComparisonChart
+              models={modelComparison}
+              taskType={results.training_config.task_type}
+            />
+
+            {/* Feature Importance Chart */}
+            {bestModel?.feature_importance && Object.keys(bestModel.feature_importance).length > 0 && (
+              <FeatureImportanceChart
+                featureImportance={bestModel.feature_importance}
+                title={`Feature Importance - ${bestModel.model_name}`}
+              />
+            )}
+
+            {/* Confusion Matrix for Classification */}
+            {results.training_config.task_type === 'classification' && bestModel?.comprehensive_metrics?.confusion_matrix && (
+              <ConfusionMatrixChart
+                confusionMatrix={bestModel.comprehensive_metrics.confusion_matrix}
+                classLabels={bestModel.comprehensive_metrics.class_labels}
+              />
+            )}
+
+            {/* Info if no visualizations available */}
+            {!bestModel?.feature_importance && results.training_config.task_type !== 'classification' && (
+              <div className="p-8 text-center bg-gray-50 rounded-lg border border-gray-200">
+                <TrendingUp className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-600">No additional visualizations available for this model.</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Feature importance and confusion matrix will appear here when available.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
