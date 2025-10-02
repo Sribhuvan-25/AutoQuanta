@@ -10,7 +10,6 @@ import { parseCSV } from '@/lib/csv-utils';
 import { generateAdvancedProfile, type DataQualityReport, type StatisticalSummary, type AdvancedColumnProfile } from '@/lib/data-profiler';
 import { handleQuotaExceededError, isStorageQuotaExceeded } from '@/lib/storage-utils';
 
-// Processed data interface
 interface ProcessedDataset {
   id: string;
   filePath: string;
@@ -28,43 +27,26 @@ interface ProcessedDataset {
     processedAt: string;
     memoryUsage: number;
   };
-  // Advanced profiling results
   statistical_summary: StatisticalSummary | null;
   quality_report: DataQualityReport | null;
 }
 
-// Data state interface
 interface DataState {
-  // Current dataset
   currentDataset: ProcessedDataset | null;
-  
-  // Dataset cache (for quick switching between files)
   datasetCache: Record<string, ProcessedDataset>;
-  
-  // Processing state
   isProcessing: boolean;
   processingStage: string;
   processingProgress: number;
-  
-  // Data exploration
   selectedColumns: string[];
   targetColumn: string | null;
   filteredData: string[][] | null;
-  
-  // Analysis results
   correlationMatrix: Record<string, Record<string, number | null>> | null;
   statisticalSummary: Record<string, unknown> | null;
-  
-  // Error handling
   error: string | null;
   warnings: DataWarning[];
-  
-  // Settings
   maxRowsToDisplay: number;
   enableDataCaching: boolean;
 }
-
-// Initial state
 const initialState: DataState = {
   currentDataset: null,
   datasetCache: {},

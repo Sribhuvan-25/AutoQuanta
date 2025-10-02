@@ -10,7 +10,7 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.model_selection import StratifiedKFold, KFold, cross_val_score, RandomizedSearchCV
 from sklearn.metrics import (
     accuracy_score, roc_auc_score, f1_score, precision_score, recall_score,
-    mean_squared_error, mean_absolute_error, r2_score, confusion_matrix
+    mean_squared_error, mean_absolute_error, r2_score, confusion_matrix, roc_curve
 )
 from sklearn.inspection import permutation_importance
 import lightgbm as lgb
@@ -328,9 +328,18 @@ class ModelTrainer:
             unique_labels = np.unique(actuals)
             metrics['class_labels'] = [str(label) for label in unique_labels]
 
-            # Add ROC AUC for binary classification
+            # Add ROC AUC and ROC curve for binary classification
             if len(np.unique(actuals)) == 2 and probabilities is not None:
                 metrics['roc_auc'] = roc_auc_score(actuals, probabilities)
+
+                # Calculate ROC curve
+                fpr, tpr, thresholds = roc_curve(actuals, probabilities)
+                metrics['roc_curve'] = {
+                    'fpr': fpr.tolist(),
+                    'tpr': tpr.tolist(),
+                    'thresholds': thresholds.tolist(),
+                    'auc': metrics['roc_auc']
+                }
 
         else:  # regression
             mse = mean_squared_error(actuals, predictions)
