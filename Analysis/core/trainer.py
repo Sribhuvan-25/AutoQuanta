@@ -12,6 +12,7 @@ from sklearn.metrics import (
     accuracy_score, roc_auc_score, f1_score, precision_score, recall_score,
     mean_squared_error, mean_absolute_error, r2_score, confusion_matrix
 )
+from sklearn.inspection import permutation_importance
 import lightgbm as lgb
 import xgboost as xgb
 import logging
@@ -252,7 +253,7 @@ class ModelTrainer:
         
         # Calculate feature importance
         feature_importance = self._calculate_feature_importance(
-            best_model, feature_names
+            best_model, X, y, feature_names, config.task_type
         )
         
         # Calculate comprehensive metrics
@@ -342,19 +343,58 @@ class ModelTrainer:
 
         return metrics
     
-    def _calculate_feature_importance(self, 
-                                    model, 
-                                    feature_names: Optional[List[str]] = None) -> Optional[Dict[str, float]]:
-        
-        if not hasattr(model, 'feature_importances_'):
+    def _calculate_feature_importance(self,
+                                    model,
+                                    X: np.ndarray,
+                                    y: np.ndarray,
+                                    feature_names: Optional[List[str]] = None,
+                                    task_type: str = 'classification') -> Optional[Dict[str, float]]:
+        """
+        Calculate feature importance using native importance or permutation importance fallback.
+        """
+
+        # Try native feature importance first
+        if hasattr(model, 'feature_importances_'):
+            importances = model.feature_importances_
+
+            if feature_names and len(feature_names) == len(importances):
+                return dict(zip(feature_names, importances.tolist()))
+            else:
+                return {f"feature_{i}": imp for i, imp in enumerate(importances.tolist())}
+
+        # Fallback to permutation importance
+        logger.info(f"Model doesn't have native feature_importances_, using permutation importance...")
+        try:
+            # Use a sample of data for faster computation if dataset is large
+            sample_size = min(1000, len(X))
+            if len(X) > sample_size:
+                sample_indices = np.random.choice(len(X), sample_size, replace=False)
+                X_sample = X[sample_indices]
+                y_sample = y[sample_indices]
+            else:
+                X_sample = X
+                y_sample = y
+
+            # Calculate permutation importance
+            scoring = 'f1_weighted' if task_type == 'classification' else 'r2'
+            perm_importance = permutation_importance(
+                model, X_sample, y_sample,
+                n_repeats=10,
+                random_state=42,
+                scoring=scoring,
+                n_jobs=self.n_jobs
+            )
+
+            importances = perm_importance.importances_mean
+
+            if feature_names and len(feature_names) == len(importances):
+                return dict(zip(feature_names, importances.tolist()))
+            else:
+                return {f"feature_{i}": imp for i, imp in enumerate(importances.tolist())}
+
+        except Exception as e:
+            logger.warning(f"Failed to calculate permutation importance: {e}")
             return None
-        
-        importances = model.feature_importances_
-        
-        if feature_names and len(feature_names) == len(importances):
-            return dict(zip(feature_names, importances.tolist()))
-        else:
-            return {f"feature_{i}": imp for i, imp in enumerate(importances.tolist())}
     
     def _select_best_model(self, results: List[ModelTrainingResult], task_type: str) -> ModelTrainingResult:
         
