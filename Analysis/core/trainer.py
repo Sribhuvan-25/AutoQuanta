@@ -10,8 +10,9 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.model_selection import StratifiedKFold, KFold, cross_val_score, RandomizedSearchCV
 from sklearn.metrics import (
     accuracy_score, roc_auc_score, f1_score, precision_score, recall_score,
-    mean_squared_error, mean_absolute_error, r2_score
+    mean_squared_error, mean_absolute_error, r2_score, confusion_matrix, roc_curve
 )
+from sklearn.inspection import permutation_importance
 import lightgbm as lgb
 import xgboost as xgb
 import logging
@@ -252,7 +253,7 @@ class ModelTrainer:
         
         # Calculate feature importance
         feature_importance = self._calculate_feature_importance(
-            best_model, feature_names
+            best_model, X, y, feature_names, config.task_type
         )
         
         # Calculate comprehensive metrics
@@ -304,13 +305,13 @@ class ModelTrainer:
         else:
             return 'r2'
     
-    def _calculate_comprehensive_metrics(self, 
-                                       predictions: np.ndarray, 
-                                       actuals: np.ndarray, 
+    def _calculate_comprehensive_metrics(self,
+                                       predictions: np.ndarray,
+                                       actuals: np.ndarray,
                                        task_type: str,
-                                       probabilities: Optional[np.ndarray] = None) -> Dict[str, float]:
+                                       probabilities: Optional[np.ndarray] = None) -> Dict[str, Any]:
         """Calculate comprehensive metrics for model evaluation."""
-        
+
         if task_type == 'classification':
             metrics = {
                 'accuracy': accuracy_score(actuals, predictions),
@@ -318,11 +319,28 @@ class ModelTrainer:
                 'precision': precision_score(actuals, predictions, average='weighted'),
                 'recall': recall_score(actuals, predictions, average='weighted')
             }
-            
-            # Add ROC AUC for binary classification
+
+            # Add confusion matrix
+            cm = confusion_matrix(actuals, predictions)
+            metrics['confusion_matrix'] = cm.tolist()
+
+            # Add class labels
+            unique_labels = np.unique(actuals)
+            metrics['class_labels'] = [str(label) for label in unique_labels]
+
+            # Add ROC AUC and ROC curve for binary classification
             if len(np.unique(actuals)) == 2 and probabilities is not None:
                 metrics['roc_auc'] = roc_auc_score(actuals, probabilities)
-                
+
+                # Calculate ROC curve
+                fpr, tpr, thresholds = roc_curve(actuals, probabilities)
+                metrics['roc_curve'] = {
+                    'fpr': fpr.tolist(),
+                    'tpr': tpr.tolist(),
+                    'thresholds': thresholds.tolist(),
+                    'auc': metrics['roc_auc']
+                }
+
         else:  # regression
             mse = mean_squared_error(actuals, predictions)
             metrics = {
@@ -331,22 +349,61 @@ class ModelTrainer:
                 'mae': mean_absolute_error(actuals, predictions),
                 'r2_score': r2_score(actuals, predictions)
             }
-        
+
         return metrics
     
-    def _calculate_feature_importance(self, 
-                                    model, 
-                                    feature_names: Optional[List[str]] = None) -> Optional[Dict[str, float]]:
-        
-        if not hasattr(model, 'feature_importances_'):
+    def _calculate_feature_importance(self,
+                                    model,
+                                    X: np.ndarray,
+                                    y: np.ndarray,
+                                    feature_names: Optional[List[str]] = None,
+                                    task_type: str = 'classification') -> Optional[Dict[str, float]]:
+        """
+        Calculate feature importance using native importance or permutation importance fallback.
+        """
+
+        # Try native feature importance first
+        if hasattr(model, 'feature_importances_'):
+            importances = model.feature_importances_
+
+            if feature_names and len(feature_names) == len(importances):
+                return dict(zip(feature_names, importances.tolist()))
+            else:
+                return {f"feature_{i}": imp for i, imp in enumerate(importances.tolist())}
+
+        # Fallback to permutation importance
+        logger.info(f"Model doesn't have native feature_importances_, using permutation importance...")
+        try:
+            # Use a sample of data for faster computation if dataset is large
+            sample_size = min(1000, len(X))
+            if len(X) > sample_size:
+                sample_indices = np.random.choice(len(X), sample_size, replace=False)
+                X_sample = X[sample_indices]
+                y_sample = y[sample_indices]
+            else:
+                X_sample = X
+                y_sample = y
+
+            # Calculate permutation importance
+            scoring = 'f1_weighted' if task_type == 'classification' else 'r2'
+            perm_importance = permutation_importance(
+                model, X_sample, y_sample,
+                n_repeats=10,
+                random_state=42,
+                scoring=scoring,
+                n_jobs=self.n_jobs
+            )
+
+            importances = perm_importance.importances_mean
+
+            if feature_names and len(feature_names) == len(importances):
+                return dict(zip(feature_names, importances.tolist()))
+            else:
+                return {f"feature_{i}": imp for i, imp in enumerate(importances.tolist())}
+
+        except Exception as e:
+            logger.warning(f"Failed to calculate permutation importance: {e}")
             return None
-        
-        importances = model.feature_importances_
-        
-        if feature_names and len(feature_names) == len(importances):
-            return dict(zip(feature_names, importances.tolist()))
-        else:
-            return {f"feature_{i}": imp for i, imp in enumerate(importances.tolist())}
     
     def _select_best_model(self, results: List[ModelTrainingResult], task_type: str) -> ModelTrainingResult:
         

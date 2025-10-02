@@ -3,22 +3,22 @@
 import React, { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { 
-  Package, 
-  Calendar, 
-  Target, 
-  BarChart3, 
-  Download, 
-  Trash2,
-  Eye,
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Package,
+  Target,
+  Download,
   FileText,
-  Database,
-  Zap,
-  RefreshCw
+  RefreshCw,
+  Filter,
+  GitCompare,
+  Grid,
+  List,
+  X
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { ModelCard } from '@/components/models/ModelCard';
+import { ModelComparison } from '@/components/models/ModelComparison';
+import { ModelTagsNotes } from '@/components/models/ModelTagsNotes';
 
 interface ModelMetadata {
   model_name: string;
@@ -45,6 +45,11 @@ export default function ModelsPage() {
   const [models, setModels] = useState<SavedModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedModel, setSelectedModel] = useState<SavedModel | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [selectedForComparison] = useState<SavedModel[]>([]);
+  const [showComparison, setShowComparison] = useState(false);
+  const [filterTaskType, setFilterTaskType] = useState<'all' | 'classification' | 'regression'>('all');
+  const [sortBy, setSortBy] = useState<'date' | 'score' | 'name'>('date');
 
   useEffect(() => {
     loadModels();
@@ -117,18 +122,36 @@ export default function ModelsPage() {
     }
   };
 
-  const getTaskTypeColor = (taskType: 'classification' | 'regression') => {
-    return taskType === 'classification' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800';
-  };
+  // Filter and sort models
+  const filteredModels = models
+    .filter(model => filterTaskType === 'all' || model.metadata.task_type === filterTaskType)
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'score':
+          return b.metadata.best_score - a.metadata.best_score;
+        case 'name':
+          return a.metadata.model_name.localeCompare(b.metadata.model_name);
+        case 'date':
+        default:
+          return b.created_date.getTime() - a.created_date.getTime();
+      }
+    });
 
-  const getModelTypeIcon = (type: string) => {
-    switch (type) {
-      case 'rf': return <Package className="w-4 h-4" />;
-      case 'lgbm': return <Zap className="w-4 h-4" />;
-      case 'xgb': return <BarChart3 className="w-4 h-4" />;
-      default: return <Database className="w-4 h-4" />;
-    }
-  };
+
+  const convertToModelCardFormat = (model: SavedModel) => ({
+    model_id: model.metadata.model_name,
+    model_name: model.metadata.model_name,
+    model_type: formatModelType(model.metadata.best_model_type),
+    task_type: model.metadata.task_type,
+    target_column: model.metadata.target_column,
+    score: model.metadata.best_score,
+    created_at: model.created_date.toISOString(),
+    feature_count: model.metadata.feature_count,
+    version: '1.0',
+    tags: [],
+    notes: '',
+    is_favorite: false
+  });
 
   if (loading) {
     return (
@@ -153,262 +176,255 @@ export default function ModelsPage() {
   return (
     <AppLayout>
       <div className="space-y-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Model Management</h1>
-          <p className="text-gray-600 mt-1">
-            Manage your trained models, view performance metrics, and prepare for inference.
-          </p>
-        </div>
-
-      {models.length === 0 ? (
-        <Card>
-          <CardContent className="text-center py-12">
-            <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Models Found</h3>
-            <p className="text-gray-600 mb-6">
-              Train your first model to see it appear here with export capabilities.
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Model Management</h1>
+            <p className="text-gray-600 mt-1">
+              Manage your trained models, view performance metrics, and prepare for inference.
             </p>
-            <Button>
-              <a href="/train">Start Training</a>
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {models.map((model, index) => (
-            <Card key={model.metadata.model_name} className="hover:shadow-lg transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center space-x-2">
-                    {getModelTypeIcon(model.metadata.best_model_type)}
-                    <CardTitle className="text-lg">
-                      {formatModelType(model.metadata.best_model_type)}
-                    </CardTitle>
-                  </div>
-                  <Badge className={getTaskTypeColor(model.metadata.task_type)}>
-                    {model.metadata.task_type}
-                  </Badge>
-                </div>
-                <p className="text-sm text-gray-600">
-                  Target: {model.metadata.target_column}
-                </p>
-              </CardHeader>
-
-              <CardContent className="space-y-4">
-                {/* Performance Score */}
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Performance:</span>
-                  <span className="font-semibold">
-                    {formatScore(model.metadata.best_score, model.metadata.task_type)}
-                  </span>
-                </div>
-
-                {/* Dataset Info */}
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Dataset:</span>
-                  <span className="text-sm">
-                    {model.metadata.training_data_shape[0]} rows × {model.metadata.feature_count} features
-                  </span>
-                </div>
-
-                {/* Creation Date */}
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Created:</span>
-                  <span className="text-sm">
-                    {formatDistanceToNow(model.created_date, { addSuffix: true })}
-                  </span>
-                </div>
-
-                {/* Model Size */}
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Size:</span>
-                  <span className="text-sm">{model.size_mb.toFixed(2)} MB</span>
-                </div>
-
-                {/* Actions */}
-                <div className="flex space-x-2 pt-4 border-t">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => setSelectedModel(model)}
-                  >
-                    <Eye className="w-4 h-4 mr-2" />
-                    Details
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      try {
-                        // Download the pickle model file
-                        const response = await fetch(`http://localhost:8000/download_model`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ model_path: model.model_path })
-                        });
-                        
-                        if (response.ok) {
-                          const blob = await response.blob();
-                          const url = window.URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `${model.metadata.model_name}_model.zip`;
-                          a.click();
-                          window.URL.revokeObjectURL(url);
-                        } else {
-                          alert('Download failed');
-                        }
-                      } catch (error) {
-                        alert('Download failed');
-                      }
-                    }}
-                  >
-                    <Download className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      if (confirm(`Delete model ${model.metadata.model_name}? This cannot be undone.`)) {
-                        try {
-                          // Delete model directory (simple approach for v1)
-                          const response = await fetch(`http://localhost:8000/delete_model`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ model_path: model.model_path })
-                          });
-                          if (response.ok) {
-                            loadModels(); // Refresh list
-                          }
-                        } catch (error) {
-                          alert('Failed to delete model');
-                        }
-                      }
-                    }}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          </div>
+          <Button onClick={() => window.location.href = '/train'}>
+            <Package className="w-4 h-4 mr-2" />
+            Train New Model
+          </Button>
         </div>
-      )}
+
+        {/* Filters and Controls */}
+        {models.length > 0 && (
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-4">
+                {/* Filter by Task Type */}
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-gray-400" />
+                  <select
+                    value={filterTaskType}
+                    onChange={(e) => setFilterTaskType(e.target.value as any)}
+                    className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">All Tasks</option>
+                    <option value="classification">Classification</option>
+                    <option value="regression">Regression</option>
+                  </select>
+                </div>
+
+                {/* Sort By */}
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="date">Sort by Date</option>
+                  <option value="score">Sort by Score</option>
+                  <option value="name">Sort by Name</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Compare Button */}
+                {selectedForComparison.length >= 2 && (
+                  <Button
+                    size="sm"
+                    onClick={() => setShowComparison(true)}
+                  >
+                    <GitCompare className="h-4 w-4 mr-2" />
+                    Compare ({selectedForComparison.length})
+                  </Button>
+                )}
+
+                {/* View Mode Toggle */}
+                <div className="flex items-center gap-1 border border-gray-300 rounded-lg p-1">
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={`p-1 rounded ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-600'}`}
+                  >
+                    <Grid className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`p-1 rounded ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-600'}`}
+                  >
+                    <List className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Model Comparison View */}
+        {showComparison && selectedForComparison.length >= 2 && (
+          <ModelComparison
+            models={selectedForComparison.map(m => ({
+              model_id: m.metadata.model_name,
+              model_name: m.metadata.model_name,
+              model_type: formatModelType(m.metadata.best_model_type),
+              task_type: m.metadata.task_type,
+              score: m.metadata.best_score,
+              created_at: m.created_date.toISOString(),
+              feature_count: m.metadata.feature_count,
+              version: '1.0'
+            }))}
+            onClose={() => setShowComparison(false)}
+          />
+        )}
+
+        {/* Models List */}
+        {models.length === 0 ? (
+          <Card>
+            <CardContent className="text-center py-12">
+              <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No Models Found</h3>
+              <p className="text-gray-600 mb-6">
+                Train your first model to see it appear here with export capabilities.
+              </p>
+              <Button onClick={() => window.location.href = '/train'}>
+                Start Training
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className={viewMode === 'grid' ? 'grid gap-6 md:grid-cols-2 lg:grid-cols-3' : 'space-y-4'}>
+            {filteredModels.map((model) => (
+              <ModelCard
+                key={model.metadata.model_name}
+                model={convertToModelCardFormat(model)}
+                onView={() => setSelectedModel(model)}
+                onDelete={async () => {
+                  if (confirm(`Delete model ${model.metadata.model_name}? This cannot be undone.`)) {
+                    try {
+                      const response = await fetch(`http://localhost:8000/delete_model`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ model_path: model.model_path })
+                      });
+                      if (response.ok) {
+                        loadModels();
+                      }
+                    } catch (error) {
+                      alert('Failed to delete model');
+                    }
+                  }
+                }}
+                onDownload={async () => {
+                  try {
+                    const response = await fetch(`http://localhost:8000/download_model`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ model_path: model.model_path })
+                    });
+
+                    if (response.ok) {
+                      const blob = await response.blob();
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${model.metadata.model_name}_model.zip`;
+                      a.click();
+                      window.URL.revokeObjectURL(url);
+                    } else {
+                      alert('Download failed');
+                    }
+                  } catch (error) {
+                    alert('Download failed');
+                  }
+                }}
+              />
+            ))}
+          </div>
+        )}
 
       {/* Model Details Modal */}
       {selectedModel && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold">Model Details</h2>
+                <div>
+                  <h2 className="text-2xl font-bold">{selectedModel.metadata.model_name}</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {formatModelType(selectedModel.metadata.best_model_type)} • {selectedModel.metadata.task_type}
+                  </p>
+                </div>
                 <Button variant="ghost" onClick={() => setSelectedModel(null)}>
-                  ×
+                  <X className="h-5 w-5" />
                 </Button>
               </div>
 
               <div className="space-y-6">
-                {/* Basic Info */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Model Type
-                    </label>
-                    <p className="text-sm bg-gray-50 p-2 rounded">
-                      {formatModelType(selectedModel.metadata.best_model_type)}
+                {/* Summary Stats */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <p className="text-xs text-blue-600 mb-1">Performance Score</p>
+                    <p className="text-2xl font-bold text-blue-700">
+                      {formatScore(selectedModel.metadata.best_score, selectedModel.metadata.task_type)}
                     </p>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Task Type
-                    </label>
-                    <Badge className={getTaskTypeColor(selectedModel.metadata.task_type)}>
-                      {selectedModel.metadata.task_type}
-                    </Badge>
-                  </div>
-                </div>
-
-                {/* Performance */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Performance Score
-                  </label>
-                  <p className="text-lg font-semibold">
-                    {formatScore(selectedModel.metadata.best_score, selectedModel.metadata.task_type)}
-                  </p>
-                </div>
-
-                {/* Training Details */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Cross-Validation Folds
-                    </label>
-                    <p className="text-sm bg-gray-50 p-2 rounded">
-                      {selectedModel.metadata.cv_folds} folds
+                  <div className="p-4 bg-purple-50 rounded-lg">
+                    <p className="text-xs text-purple-600 mb-1">Dataset Size</p>
+                    <p className="text-2xl font-bold text-purple-700">
+                      {selectedModel.metadata.training_data_shape[0].toLocaleString()} rows
                     </p>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Target Column
-                    </label>
-                    <p className="text-sm bg-gray-50 p-2 rounded">
-                      {selectedModel.metadata.target_column}
+                  <div className="p-4 bg-green-50 rounded-lg">
+                    <p className="text-xs text-green-600 mb-1">Features</p>
+                    <p className="text-2xl font-bold text-green-700">
+                      {selectedModel.metadata.feature_count}
                     </p>
                   </div>
                 </div>
 
-                {/* Dataset Info */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Training Dataset
-                  </label>
-                  <div className="bg-gray-50 p-3 rounded">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="font-medium">Rows:</span> {selectedModel.metadata.training_data_shape[0]}
-                      </div>
-                      <div>
-                        <span className="font-medium">Columns:</span> {selectedModel.metadata.training_data_shape[1]}
-                      </div>
-                      <div>
-                        <span className="font-medium">Features:</span> {selectedModel.metadata.feature_count}
-                      </div>
-                      <div>
-                        <span className="font-medium">Size:</span> {selectedModel.size_mb.toFixed(2)} MB
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                {/* Tags and Notes */}
+                <ModelTagsNotes
+                  modelId={selectedModel.metadata.model_name}
+                  tags={[]}
+                  notes=""
+                  onTagsUpdate={(tags) => {
+                    // TODO: Implement tags update API call
+                    console.log('Tags updated:', tags);
+                  }}
+                  onNotesUpdate={(notes) => {
+                    // TODO: Implement notes update API call
+                    console.log('Notes updated:', notes);
+                  }}
+                />
 
-                {/* Models Trained */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Models Evaluated
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedModel.metadata.models_trained.map(modelType => (
-                      <Badge key={modelType} variant="outline">
-                        {formatModelType(modelType)}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Actions */}
+                {/* Quick Actions */}
                 <div className="flex space-x-3 pt-4 border-t">
-                  <Button 
+                  <Button
                     className="flex-1"
                     onClick={() => {
-                      // Navigate to prediction page with this model pre-selected
                       window.location.href = `/predict?model=${selectedModel.metadata.model_name}`;
                     }}
                   >
                     <Target className="w-4 h-4 mr-2" />
                     Use for Prediction
                   </Button>
-                  <Button variant="outline">
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(`http://localhost:8000/download_model`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ model_path: selectedModel.model_path })
+                        });
+
+                        if (response.ok) {
+                          const blob = await response.blob();
+                          const url = window.URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `${selectedModel.metadata.model_name}_model.zip`;
+                          a.click();
+                          window.URL.revokeObjectURL(url);
+                        }
+                      } catch (error) {
+                        alert('Download failed');
+                      }
+                    }}
+                  >
                     <Download className="w-4 h-4 mr-2" />
                     Download
                   </Button>

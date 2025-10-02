@@ -20,6 +20,9 @@ import { PreprocessingReport } from './PreprocessingReport';
 import { FeatureImportanceChart } from '@/components/charts/FeatureImportanceChart';
 import { ConfusionMatrixChart } from '@/components/charts/ConfusionMatrixChart';
 import { ModelComparisonChart } from '@/components/charts/ModelComparisonChart';
+import { ROCCurveChart } from '@/components/charts/ROCCurveChart';
+import { ResidualPlot } from '@/components/charts/ResidualPlot';
+import { LearningCurveChart } from '@/components/charts/LearningCurveChart';
 
 interface TrainingResultsProps {
   results: TrainingResults | null;
@@ -215,10 +218,45 @@ export function TrainingResults({
             )}
 
             {/* Confusion Matrix for Classification */}
-            {results.training_config.task_type === 'classification' && bestModel?.comprehensive_metrics?.confusion_matrix && (
+            {results.training_config.task_type === 'classification' &&
+             bestModel?.comprehensive_metrics?.confusion_matrix &&
+             Array.isArray(bestModel.comprehensive_metrics.confusion_matrix) && (
               <ConfusionMatrixChart
-                confusionMatrix={bestModel.comprehensive_metrics.confusion_matrix}
-                classLabels={bestModel.comprehensive_metrics.class_labels}
+                confusionMatrix={bestModel.comprehensive_metrics.confusion_matrix as number[][]}
+                classLabels={Array.isArray(bestModel.comprehensive_metrics.class_labels)
+                  ? bestModel.comprehensive_metrics.class_labels as string[]
+                  : undefined}
+              />
+            )}
+
+            {/* ROC Curve for Binary Classification */}
+            {results.training_config.task_type === 'classification' &&
+             bestModel?.comprehensive_metrics?.roc_curve &&
+             typeof bestModel.comprehensive_metrics.roc_curve === 'object' && (
+              <ROCCurveChart
+                rocData={bestModel.comprehensive_metrics.roc_curve as any}
+              />
+            )}
+
+            {/* Residual Plot for Regression */}
+            {results.training_config.task_type === 'regression' &&
+             bestModel?.comprehensive_metrics?.all_predictions &&
+             bestModel?.comprehensive_metrics?.all_actuals && (
+              <ResidualPlot
+                predictions={Array.isArray(bestModel.comprehensive_metrics.all_predictions)
+                  ? bestModel.comprehensive_metrics.all_predictions
+                  : []}
+                actuals={Array.isArray(bestModel.comprehensive_metrics.all_actuals)
+                  ? bestModel.comprehensive_metrics.all_actuals
+                  : []}
+              />
+            )}
+
+            {/* Learning Curve */}
+            {bestModel && 'fold_results' in bestModel && Array.isArray((bestModel as any).fold_results) && (bestModel as any).fold_results.length > 0 && (
+              <LearningCurveChart
+                foldResults={(bestModel as any).fold_results}
+                taskType={results.training_config.task_type}
               />
             )}
 
