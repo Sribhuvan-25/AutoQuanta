@@ -10,7 +10,7 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.model_selection import StratifiedKFold, KFold, cross_val_score, RandomizedSearchCV
 from sklearn.metrics import (
     accuracy_score, roc_auc_score, f1_score, precision_score, recall_score,
-    mean_squared_error, mean_absolute_error, r2_score
+    mean_squared_error, mean_absolute_error, r2_score, confusion_matrix
 )
 import lightgbm as lgb
 import xgboost as xgb
@@ -304,13 +304,13 @@ class ModelTrainer:
         else:
             return 'r2'
     
-    def _calculate_comprehensive_metrics(self, 
-                                       predictions: np.ndarray, 
-                                       actuals: np.ndarray, 
+    def _calculate_comprehensive_metrics(self,
+                                       predictions: np.ndarray,
+                                       actuals: np.ndarray,
                                        task_type: str,
-                                       probabilities: Optional[np.ndarray] = None) -> Dict[str, float]:
+                                       probabilities: Optional[np.ndarray] = None) -> Dict[str, Any]:
         """Calculate comprehensive metrics for model evaluation."""
-        
+
         if task_type == 'classification':
             metrics = {
                 'accuracy': accuracy_score(actuals, predictions),
@@ -318,11 +318,19 @@ class ModelTrainer:
                 'precision': precision_score(actuals, predictions, average='weighted'),
                 'recall': recall_score(actuals, predictions, average='weighted')
             }
-            
+
+            # Add confusion matrix
+            cm = confusion_matrix(actuals, predictions)
+            metrics['confusion_matrix'] = cm.tolist()
+
+            # Add class labels
+            unique_labels = np.unique(actuals)
+            metrics['class_labels'] = [str(label) for label in unique_labels]
+
             # Add ROC AUC for binary classification
             if len(np.unique(actuals)) == 2 and probabilities is not None:
                 metrics['roc_auc'] = roc_auc_score(actuals, probabilities)
-                
+
         else:  # regression
             mse = mean_squared_error(actuals, predictions)
             metrics = {
@@ -331,7 +339,7 @@ class ModelTrainer:
                 'mae': mean_absolute_error(actuals, predictions),
                 'r2_score': r2_score(actuals, predictions)
             }
-        
+
         return metrics
     
     def _calculate_feature_importance(self, 

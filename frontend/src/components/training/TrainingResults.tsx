@@ -215,10 +215,14 @@ export function TrainingResults({
             )}
 
             {/* Confusion Matrix for Classification */}
-            {results.training_config.task_type === 'classification' && bestModel?.comprehensive_metrics?.confusion_matrix && (
+            {results.training_config.task_type === 'classification' &&
+             bestModel?.comprehensive_metrics?.confusion_matrix &&
+             Array.isArray(bestModel.comprehensive_metrics.confusion_matrix) && (
               <ConfusionMatrixChart
-                confusionMatrix={bestModel.comprehensive_metrics.confusion_matrix}
-                classLabels={bestModel.comprehensive_metrics.class_labels}
+                confusionMatrix={bestModel.comprehensive_metrics.confusion_matrix as number[][]}
+                classLabels={Array.isArray(bestModel.comprehensive_metrics.class_labels)
+                  ? bestModel.comprehensive_metrics.class_labels as string[]
+                  : undefined}
               />
             )}
 
