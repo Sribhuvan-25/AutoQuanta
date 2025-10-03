@@ -19,6 +19,8 @@ import {
 import { ModelCard } from '@/components/models/ModelCard';
 import { ModelComparison } from '@/components/models/ModelComparison';
 import { ModelTagsNotes } from '@/components/models/ModelTagsNotes';
+import { ExportHub } from '@/components/reports/ExportHub';
+import { exportTrainingSummary } from '@/lib/export-utils';
 
 interface ModelMetadata {
   model_name: string;
@@ -48,6 +50,7 @@ export default function ModelsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedForComparison] = useState<SavedModel[]>([]);
   const [showComparison, setShowComparison] = useState(false);
+  const [showExportHub, setShowExportHub] = useState(false);
   const [filterTaskType, setFilterTaskType] = useState<'all' | 'classification' | 'regression'>('all');
   const [sortBy, setSortBy] = useState<'date' | 'score' | 'name'>('date');
 
@@ -153,6 +156,45 @@ export default function ModelsPage() {
     is_favorite: false
   });
 
+  const handleExportJSON = (modelId: string) => {
+    const model = models.find(m => m.metadata.model_name === modelId);
+    if (!model) return;
+
+    const exportData = {
+      model_name: model.metadata.model_name,
+      model_type: formatModelType(model.metadata.best_model_type),
+      task_type: model.metadata.task_type,
+      target_column: model.metadata.target_column,
+      score: model.metadata.best_score,
+      feature_count: model.metadata.feature_count,
+      training_data_shape: model.metadata.training_data_shape,
+      cv_folds: model.metadata.cv_folds,
+      created_at: model.created_date.toISOString(),
+      models_trained: model.metadata.models_trained,
+    };
+
+    exportTrainingSummary.toJSON(exportData, `${model.metadata.model_name}_summary.json`);
+  };
+
+  const handleExportCSV = (modelId: string) => {
+    const model = models.find(m => m.metadata.model_name === modelId);
+    if (!model) return;
+
+    const exportData = [{
+      model_name: model.metadata.model_name,
+      model_type: formatModelType(model.metadata.best_model_type),
+      task_type: model.metadata.task_type,
+      target_column: model.metadata.target_column,
+      score: model.metadata.best_score,
+      feature_count: model.metadata.feature_count,
+      rows: model.metadata.training_data_shape[0],
+      columns: model.metadata.training_data_shape[1],
+      created_at: model.created_date.toISOString(),
+    }];
+
+    exportTrainingSummary.toCSV(exportData, `${model.metadata.model_name}_summary.csv`);
+  };
+
   if (loading) {
     return (
       <AppLayout>
@@ -222,6 +264,28 @@ export default function ModelsPage() {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Export All Button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const allModelsData = filteredModels.map(m => ({
+                      model_name: m.metadata.model_name,
+                      model_type: formatModelType(m.metadata.best_model_type),
+                      task_type: m.metadata.task_type,
+                      target_column: m.metadata.target_column,
+                      score: m.metadata.best_score,
+                      feature_count: m.metadata.feature_count,
+                      rows: m.metadata.training_data_shape[0],
+                      created_at: m.created_date.toISOString(),
+                    }));
+                    exportTrainingSummary.toCSV(allModelsData, 'all_models_summary.csv');
+                  }}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Export All CSV
+                </Button>
+
                 {/* Compare Button */}
                 {selectedForComparison.length >= 2 && (
                   <Button
@@ -330,6 +394,8 @@ export default function ModelsPage() {
                     alert('Download failed');
                   }
                 }}
+                onExportJSON={() => handleExportJSON(model.metadata.model_name)}
+                onExportCSV={() => handleExportCSV(model.metadata.model_name)}
               />
             ))}
           </div>
@@ -381,11 +447,9 @@ export default function ModelsPage() {
                   tags={[]}
                   notes=""
                   onTagsUpdate={(tags) => {
-                    // TODO: Implement tags update API call
                     console.log('Tags updated:', tags);
                   }}
                   onNotesUpdate={(notes) => {
-                    // TODO: Implement notes update API call
                     console.log('Notes updated:', notes);
                   }}
                 />
@@ -428,11 +492,43 @@ export default function ModelsPage() {
                     <Download className="w-4 h-4 mr-2" />
                     Download
                   </Button>
-                  <Button variant="outline">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowExportHub(true)}
+                  >
                     <FileText className="w-4 h-4 mr-2" />
-                    Export Report
+                    Export & Reports
                   </Button>
                 </div>
+
+                {/* Export Hub */}
+                {showExportHub && (
+                  <div className="mt-6 pt-6 border-t">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Export & Reports</h3>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowExportHub(false)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <ExportHub
+                      modelData={{
+                        model_name: selectedModel.metadata.model_name,
+                        model_type: selectedModel.metadata.best_model_type,
+                        task_type: selectedModel.metadata.task_type,
+                        target_column: selectedModel.metadata.target_column,
+                        score: selectedModel.metadata.best_score,
+                        feature_count: selectedModel.metadata.feature_count,
+                        created_at: selectedModel.created_date.toISOString(),
+                        cv_folds: selectedModel.metadata.cv_folds,
+                        training_data_shape: selectedModel.metadata.training_data_shape,
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>
