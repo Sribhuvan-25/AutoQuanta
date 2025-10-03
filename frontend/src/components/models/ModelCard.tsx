@@ -16,7 +16,9 @@ import {
   Download,
   Share2,
   Star,
-  BarChart3
+  BarChart3,
+  FileJson,
+  FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -43,6 +45,8 @@ interface ModelCardProps {
   onDownload?: (modelId: string) => void;
   onShare?: (modelId: string) => void;
   onToggleFavorite?: (modelId: string) => void;
+  onExportJSON?: (modelId: string) => void;
+  onExportCSV?: (modelId: string) => void;
   className?: string;
 }
 
@@ -54,6 +58,8 @@ export function ModelCard({
   onDownload,
   onShare,
   onToggleFavorite,
+  onExportJSON,
+  onExportCSV,
   className
 }: ModelCardProps) {
   const [showMenu, setShowMenu] = useState(false);
@@ -196,6 +202,33 @@ export function ModelCard({
                   >
                     <Share2 className="h-4 w-4" />
                     Share
+                  </button>
+                )}
+                <div className="border-t border-gray-200 my-1" />
+                {onExportJSON && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onExportJSON(model.model_id);
+                      setShowMenu(false);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+                  >
+                    <FileJson className="h-4 w-4" />
+                    Export as JSON
+                  </button>
+                )}
+                {onExportCSV && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onExportCSV(model.model_id);
+                      setShowMenu(false);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+                  >
+                    <FileText className="h-4 w-4" />
+                    Export as CSV
                   </button>
                 )}
                 {onDelete && (

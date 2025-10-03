@@ -45,6 +45,27 @@ def emit_progress(stage: str, progress: float, message: str, extra_data: Dict = 
     print(f"PROGRESS:{json.dumps(progress_event)}")
     sys.stdout.flush()
 
+def emit_metric(metric_name: str, value: Any, extra_data: Dict = None):
+    """Emit a metric event as JSON to stdout."""
+    metric_event = {
+        "metric": metric_name,
+        "value": value,
+        "timestamp": time.time(),
+        **(extra_data or {})
+    }
+    print(f"METRIC:{json.dumps(metric_event)}")
+    sys.stdout.flush()
+
+def emit_log(level: str, message: str):
+    """Emit a log event as JSON to stdout."""
+    log_event = {
+        "level": level,
+        "message": message,
+        "timestamp": time.time()
+    }
+    print(f"LOG:{json.dumps(log_event)}")
+    sys.stdout.flush()
+
 def serialize_training_results(results) -> Dict[str, Any]:
     """Convert TrainingResults to JSON-serializable format."""
     try:
@@ -389,6 +410,8 @@ def train_from_api(csv_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
         preprocessing_config = config.get('preprocessing', None)
 
         # Call the training engine
+        emit_log('info', f"Training {len(python_models)} model(s) with {config.get('cv_folds', 5)}-fold cross-validation")
+
         results = train_models(
             df=df,
             target_column=target_column,
@@ -399,13 +422,19 @@ def train_from_api(csv_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
             random_seed=config.get('random_seed', 42),
             preprocessing_config=preprocessing_config
         )
-        
+
         # Stage 4: Results Processing
         emit_progress("evaluating", 90, "Processing training results...")
-        
-        logger.info(f"Training completed successfully!")
-        logger.info(f"Best model: {results.best_model.model_name}")
-        logger.info(f"Best score: {results.best_model.mean_score:.4f}")
+
+        # Emit metrics for best model
+        emit_metric('best_score', results.best_model.mean_score, {
+            'model_name': results.best_model.model_name,
+            'std_score': results.best_model.std_score
+        })
+
+        emit_log('success', f"Training completed successfully!")
+        emit_log('info', f"Best model: {results.best_model.model_name}")
+        emit_log('info', f"Best score: {results.best_model.mean_score:.4f}")
         
         # Serialize results for frontend
         serialized_results = serialize_training_results(results)

@@ -15,11 +15,15 @@ from pathlib import Path
 from typing import Dict, Any, List
 import traceback
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import pandas as pd
 import uvicorn
+import asyncio
+from collections import defaultdict
+import uuid
 
 # Add the project root to the path
 project_root = Path(__file__).parent
@@ -43,6 +47,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Global storage for training sessions and their event queues
+training_sessions: Dict[str, Dict[str, Any]] = {}
+training_event_queues: Dict[str, asyncio.Queue] = defaultdict(asyncio.Queue)
 
 # Pydantic models for request/response
 class HealthResponse(BaseModel):
@@ -86,13 +94,218 @@ async def health_check():
         working_directory=str(project_root)
     )
 
+@app.get("/training/stream/{session_id}")
+async def training_stream(session_id: str, request: Request):
+    """
+    Server-Sent Events endpoint for real-time training updates
+    """
+    async def event_generator():
+        queue = training_event_queues[session_id]
+
+        try:
+            # Send initial connection event
+            yield f"data: {json.dumps({'type': 'connected', 'session_id': session_id, 'timestamp': time.time()})}\n\n"
+
+            while True:
+                # Check if client is still connected
+                if await request.is_disconnected():
+                    logger.info(f"Client disconnected from training stream {session_id}")
+                    break
+
+                try:
+                    # Wait for events with timeout
+                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
+
+                    # Send event to client
+                    yield f"data: {json.dumps(event)}\n\n"
+
+                    # If training is complete or error, close the stream
+                    if event.get('type') in ['complete', 'error']:
+                        break
+
+                except asyncio.TimeoutError:
+                    # Send keepalive ping
+                    yield f"data: {json.dumps({'type': 'ping', 'timestamp': time.time()})}\n\n"
+
+        except Exception as e:
+            logger.error(f"Error in training stream {session_id}: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'error': str(e), 'timestamp': time.time()})}\n\n"
+        finally:
+            # Cleanup
+            if session_id in training_event_queues:
+                del training_event_queues[session_id]
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+async def emit_training_event(session_id: str, event_type: str, data: Any):
+    """Helper function to emit training events to SSE stream"""
+    if session_id in training_event_queues:
+        event = {
+            'type': event_type,
+            'data': data,
+            'timestamp': time.time()
+        }
+        await training_event_queues[session_id].put(event)
+
+@app.post("/train_async")
+async def train_model_async(
+    csv_file: UploadFile = File(...),
+    config: str = Form(default="{}")
+):
+    """
+    Start async training with SSE streaming support
+    Returns session_id for monitoring via /training/stream/{session_id}
+    """
+    try:
+        # Generate session ID
+        session_id = str(uuid.uuid4())
+
+        # Parse config
+        try:
+            config_dict = json.loads(config)
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid config JSON: {e}")
+
+        # Read CSV content
+        csv_content = await csv_file.read()
+        csv_text = csv_content.decode('utf-8')
+
+        # Create temporary CSV file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as temp_csv:
+            temp_csv.write(csv_text)
+            temp_csv_path = temp_csv.name
+
+        # Store session info
+        training_sessions[session_id] = {
+            'status': 'starting',
+            'config': config_dict,
+            'csv_path': temp_csv_path,
+            'started_at': time.time()
+        }
+
+        # Start training in background
+        asyncio.create_task(run_training_with_streaming(session_id, temp_csv_path, config_dict))
+
+        return {
+            'success': True,
+            'session_id': session_id,
+            'message': 'Training started. Connect to /training/stream/{session_id} for updates'
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to start training: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def run_training_with_streaming(session_id: str, csv_path: str, config: dict):
+    """Run training in background and emit SSE events"""
+    try:
+        await emit_training_event(session_id, 'status', {'status': 'starting', 'message': 'Initializing training...'})
+
+        train_api_path = project_root / 'Analysis' / 'train_api.py'
+
+        cmd = [
+            sys.executable,
+            str(train_api_path),
+            csv_path,
+            json.dumps(config),
+            '--session-id', session_id  # Pass session ID to training script
+        ]
+
+        # Run process and stream output
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=str(project_root)
+        )
+
+        training_sessions[session_id]['status'] = 'running'
+        await emit_training_event(session_id, 'status', {'status': 'running', 'message': 'Training in progress...'})
+
+        # Read stdout line by line
+        while True:
+            line = await process.stdout.readline()
+            if not line:
+                break
+
+            line_text = line.decode('utf-8').strip()
+
+            # Parse progress messages
+            if line_text.startswith('PROGRESS:'):
+                try:
+                    progress_data = json.loads(line_text[9:])
+                    await emit_training_event(session_id, 'progress', progress_data)
+                except json.JSONDecodeError:
+                    pass
+            elif line_text.startswith('METRIC:'):
+                try:
+                    metric_data = json.loads(line_text[7:])
+                    await emit_training_event(session_id, 'metric', metric_data)
+                except json.JSONDecodeError:
+                    pass
+            elif line_text.startswith('LOG:'):
+                try:
+                    log_data = json.loads(line_text[4:])
+                    await emit_training_event(session_id, 'log', log_data)
+                except json.JSONDecodeError:
+                    pass
+            elif line_text and not line_text.startswith('[LightGBM]'):
+                # Regular log message
+                await emit_training_event(session_id, 'log', {
+                    'level': 'info',
+                    'message': line_text,
+                    'timestamp': time.time()
+                })
+
+        # Wait for process to complete
+        await process.wait()
+
+        # Clean up temp file
+        if os.path.exists(csv_path):
+            os.unlink(csv_path)
+
+        if process.returncode == 0:
+            # Read stderr to get final JSON result
+            stderr = await process.stderr.read()
+            stderr_text = stderr.decode('utf-8')
+
+            # Try to extract JSON result from output
+            try:
+                # The final result should be in stderr or we need to parse it differently
+                training_sessions[session_id]['status'] = 'completed'
+                await emit_training_event(session_id, 'complete', {
+                    'message': 'Training completed successfully',
+                    'session_id': session_id
+                })
+            except Exception as e:
+                logger.error(f"Failed to parse training result: {e}")
+                await emit_training_event(session_id, 'error', {'error': str(e)})
+        else:
+            stderr = await process.stderr.read()
+            error_msg = stderr.decode('utf-8')
+            training_sessions[session_id]['status'] = 'error'
+            await emit_training_event(session_id, 'error', {'error': error_msg})
+
+    except Exception as e:
+        logger.error(f"Training error for session {session_id}: {e}")
+        training_sessions[session_id]['status'] = 'error'
+        await emit_training_event(session_id, 'error', {'error': str(e)})
+
 @app.post("/train")
 async def train_model(
     csv_file: UploadFile = File(...),
     config: str = Form(default="{}")
 ):
     """
-    Train ML model using the actual train_api.py script
+    Train ML model using the actual train_api.py script (synchronous, original behavior)
     """
     try:
         logger.info("Received training request")
