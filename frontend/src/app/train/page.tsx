@@ -49,7 +49,7 @@ export default function TrainPage() {
   const projectSavePath = useAppSelector(selectProjectSavePath);
   
   const [showResults, setShowResults] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<any>(null);
+  const [selectedModel, setSelectedModel] = useState<ModelTrainingResult | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleStartTraining = async (config: TrainingConfigType) => {
@@ -105,30 +105,38 @@ export default function TrainPage() {
     <AppLayout>
       <div className="space-y-8">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Model Training</h1>
-          <p className="text-gray-600 mt-1">
-            Configure and train machine learning models on your data.
-          </p>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-4xl font-bold tracking-tight text-gray-900">Model Training</h1>
+            <p className="text-lg text-gray-600 mt-3 max-w-3xl">
+              Configure and train machine learning models on your data with automatic hyperparameter optimization.
+            </p>
+          </div>
           {currentProject && (
-            <div className="mt-3 flex items-center gap-2 text-sm text-blue-700 bg-blue-50 px-3 py-2 rounded-lg">
-              <Folder className="h-4 w-4" />
-              <span>
-                Training results will be saved to: <strong>{currentProject.metadata.name}</strong>
-              </span>
+            <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gray-100 rounded-xl border border-gray-200">
+                  <Folder className="h-4 w-4 text-gray-900" />
+                </div>
+                <span className="text-sm text-gray-700">
+                  Training results will be saved to <strong className="text-gray-900">{currentProject.metadata.name}</strong>
+                </span>
+              </div>
             </div>
           )}
         </div>
 
         {/* Project Recommendation Notice */}
         {!isProjectLoaded && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-3">
-                <Folder className="h-5 w-5 text-blue-600 mt-0.5" />
+          <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+            <div className="flex items-start justify-between gap-6">
+              <div className="flex items-start gap-4 flex-1">
+                <div className="p-3 bg-gray-100 rounded-xl border border-gray-200">
+                  <Folder className="h-5 w-5 text-gray-900" />
+                </div>
                 <div>
-                  <h3 className="text-sm font-medium text-blue-800">Project Recommended</h3>
-                  <p className="text-sm text-blue-700 mt-1">
+                  <h3 className="text-base font-semibold text-gray-900">Project Recommended</h3>
+                  <p className="text-sm text-gray-600 mt-2 leading-relaxed">
                     Create a project to automatically save your training results and models for future use.
                   </p>
                 </div>
@@ -137,7 +145,7 @@ export default function TrainPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => dispatch(showCreateWizard())}
-                className="text-blue-600 border-blue-300"
+                className="flex-shrink-0"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Create Project
@@ -148,20 +156,22 @@ export default function TrainPage() {
 
         {/* Error Display */}
         {trainingError && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
+          <div className="bg-white/60 backdrop-blur-2xl border border-red-200 rounded-2xl shadow-sm p-6">
+            <div className="flex items-start justify-between gap-6">
+              <div className="flex items-start gap-4 flex-1">
+                <div className="p-3 bg-red-50 rounded-xl border border-red-200">
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                </div>
                 <div>
-                  <h3 className="text-sm font-medium text-red-800">Training Error</h3>
-                  <p className="text-sm text-red-700 mt-1">{trainingError}</p>
+                  <h3 className="text-base font-semibold text-gray-900">Training Error</h3>
+                  <p className="text-sm text-gray-600 mt-2 leading-relaxed">{trainingError}</p>
                 </div>
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleRetryTraining}
-                className="text-red-600 border-red-300"
+                className="flex-shrink-0"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Retry
@@ -206,21 +216,21 @@ export default function TrainPage() {
 
             {/* Project Save Status */}
             {resultsSavedToProject && currentProject && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0">
+              <div className="bg-white/60 backdrop-blur-2xl border border-green-200 rounded-2xl shadow-sm p-6">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-green-50 rounded-xl border border-green-200">
                     <svg className="h-5 w-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-sm font-medium text-green-800">Results Saved to Project</h3>
-                    <p className="text-sm text-green-700 mt-1">
-                      Training results and models have been saved to <strong>{currentProject.metadata.name}</strong>
+                    <h3 className="text-base font-semibold text-gray-900">Results Saved to Project</h3>
+                    <p className="text-sm text-gray-600 mt-2 leading-relaxed">
+                      Training results and models have been saved to <strong className="text-gray-900">{currentProject.metadata.name}</strong>
                       {projectSavePath && (
                         <>
                           <br />
-                          <span className="text-xs font-mono text-green-600">{projectSavePath}</span>
+                          <span className="text-xs font-mono text-gray-500 mt-1 block">{projectSavePath}</span>
                         </>
                       )}
                     </p>

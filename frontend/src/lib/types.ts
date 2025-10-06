@@ -106,7 +106,7 @@ export interface TrainingResults {
   all_models: ModelTrainingResult[];
   training_config: TrainingConfig;
   data_profile: DataProfile;
-  preprocessing_report?: any;
+  preprocessing_report?: Record<string, unknown>;
   cv_summary: Record<string, unknown>;
   model_comparison: Record<string, unknown>;
   prediction_analysis: Record<string, unknown>;
@@ -206,7 +206,7 @@ export interface SavedModel {
 export interface PredictionInput {
   model_id: string;
   input_type: 'single' | 'batch';
-  data?: Record<string, any>; // Single prediction - feature:value pairs
+  data?: Record<string, unknown>; // Single prediction - feature:value pairs
   csv_file?: File; // Batch prediction - CSV file
   csv_data?: string[][]; // Batch prediction - parsed CSV data
 }
@@ -214,7 +214,7 @@ export interface PredictionInput {
 export interface PredictionResult {
   predictions: number[];
   probabilities?: number[][]; // For classification
-  feature_values?: Record<string, any>[]; // Input features for each prediction
+  feature_values?: Record<string, unknown>[]; // Input features for each prediction
   prediction_metadata?: {
     model_name: string;
     model_version: string;

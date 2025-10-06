@@ -24,8 +24,6 @@ export function CorrelationHeatmap({
 
   // Get color based on correlation value
   const getColor = (value: number): string => {
-    // Normalize to 0-1 range (correlation is -1 to 1)
-    const normalized = (value + 1) / 2;
 
     if (value > 0.7) return '#dc2626'; // Strong positive - red
     if (value > 0.4) return '#f97316'; // Moderate positive - orange

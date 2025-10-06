@@ -43,6 +43,22 @@ interface SavedModel {
   created_date: Date;
 }
 
+interface APIModel {
+  model_name: string;
+  export_timestamp: string;
+  best_model_type: string;
+  best_score: number;
+  task_type: 'classification' | 'regression';
+  target_column: string;
+  feature_count: number;
+  training_data_shape: [number, number];
+  cv_folds: number;
+  models_trained: string[];
+  model_path: string;
+  metadata_path: string;
+  size_mb: number;
+}
+
 export default function ModelsPage() {
   const [models, setModels] = useState<SavedModel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +84,7 @@ export default function ModelsPage() {
       
       if (data.success && data.models) {
         // Convert API response to SavedModel format
-        const formattedModels: SavedModel[] = data.models.map((model: any) => ({
+        const formattedModels: SavedModel[] = data.models.map((model: APIModel) => ({
           metadata: {
             model_name: model.model_name,
             export_timestamp: model.export_timestamp,
@@ -200,14 +216,14 @@ export default function ModelsPage() {
       <AppLayout>
         <div className="space-y-8">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Model Management</h1>
-            <p className="text-gray-600 mt-1">Manage and deploy your trained machine learning models</p>
+            <h1 className="text-4xl font-bold tracking-tight text-gray-900">Model Management</h1>
+            <p className="text-lg text-gray-600 mt-3 max-w-3xl">Manage and deploy your trained machine learning models</p>
           </div>
-          
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
+
+          <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-8">
             <div className="flex items-center justify-center py-8">
-              <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
-              <span className="text-gray-600">Loading saved models...</span>
+              <RefreshCw className="h-6 w-6 animate-spin text-gray-700 mr-3" />
+              <span className="text-gray-600 font-medium">Loading saved models...</span>
             </div>
           </div>
         </div>
@@ -219,14 +235,14 @@ export default function ModelsPage() {
     <AppLayout>
       <div className="space-y-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Model Management</h1>
-            <p className="text-gray-600 mt-1">
+            <h1 className="text-4xl font-bold tracking-tight text-gray-900">Model Management</h1>
+            <p className="text-lg text-gray-600 mt-3 max-w-3xl">
               Manage your trained models, view performance metrics, and prepare for inference.
             </p>
           </div>
-          <Button onClick={() => window.location.href = '/train'}>
+          <Button onClick={() => window.location.href = '/train'} className="flex-shrink-0">
             <Package className="w-4 h-4 mr-2" />
             Train New Model
           </Button>
@@ -234,16 +250,18 @@ export default function ModelsPage() {
 
         {/* Filters and Controls */}
         {models.length > 0 && (
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-5">
             <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 {/* Filter by Task Type */}
                 <div className="flex items-center gap-2">
-                  <Filter className="h-4 w-4 text-gray-400" />
+                  <div className="p-1.5 bg-gray-100 rounded-lg border border-gray-200">
+                    <Filter className="h-4 w-4 text-gray-700" />
+                  </div>
                   <select
                     value={filterTaskType}
-                    onChange={(e) => setFilterTaskType(e.target.value as any)}
-                    className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={(e) => setFilterTaskType(e.target.value as 'all' | 'classification' | 'regression')}
+                    className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white"
                   >
                     <option value="all">All Tasks</option>
                     <option value="classification">Classification</option>
@@ -254,8 +272,8 @@ export default function ModelsPage() {
                 {/* Sort By */}
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={(e) => setSortBy(e.target.value as 'date' | 'score' | 'name')}
+                  className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white"
                 >
                   <option value="date">Sort by Date</option>
                   <option value="score">Sort by Score</option>
@@ -263,7 +281,7 @@ export default function ModelsPage() {
                 </select>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 {/* Export All Button */}
                 <Button
                   variant="outline"
@@ -298,16 +316,16 @@ export default function ModelsPage() {
                 )}
 
                 {/* View Mode Toggle */}
-                <div className="flex items-center gap-1 border border-gray-300 rounded-lg p-1">
+                <div className="flex items-center gap-1 border border-gray-300 rounded-xl p-1 bg-white">
                   <button
                     onClick={() => setViewMode('grid')}
-                    className={`p-1 rounded ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-600'}`}
+                    className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
                   >
                     <Grid className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => setViewMode('list')}
-                    className={`p-1 rounded ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-600'}`}
+                    className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
                   >
                     <List className="h-4 w-4" />
                   </button>
@@ -366,7 +384,7 @@ export default function ModelsPage() {
                       if (response.ok) {
                         loadModels();
                       }
-                    } catch (error) {
+                    } catch {
                       alert('Failed to delete model');
                     }
                   }
@@ -390,7 +408,7 @@ export default function ModelsPage() {
                     } else {
                       alert('Download failed');
                     }
-                  } catch (error) {
+                  } catch {
                     alert('Download failed');
                   }
                 }}
@@ -403,39 +421,39 @@ export default function ModelsPage() {
 
       {/* Model Details Modal */}
       {selectedModel && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto shadow-xl border border-white/40">
+            <div className="p-8">
+              <div className="flex items-center justify-between mb-8">
                 <div>
-                  <h2 className="text-2xl font-bold">{selectedModel.metadata.model_name}</h2>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <h2 className="text-3xl font-bold text-gray-900">{selectedModel.metadata.model_name}</h2>
+                  <p className="text-base text-gray-600 mt-2">
                     {formatModelType(selectedModel.metadata.best_model_type)} • {selectedModel.metadata.task_type}
                   </p>
                 </div>
                 <Button variant="ghost" onClick={() => setSelectedModel(null)}>
-                  <X className="h-5 w-5" />
+                  <X className="h-6 w-6" />
                 </Button>
               </div>
 
               <div className="space-y-6">
                 {/* Summary Stats */}
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <p className="text-xs text-blue-600 mb-1">Performance Score</p>
-                    <p className="text-2xl font-bold text-blue-700">
+                  <div className="p-5 bg-gradient-to-br from-gray-100 to-gray-50 rounded-2xl border border-gray-200 shadow-sm">
+                    <p className="text-xs font-medium text-gray-600 mb-2">Performance Score</p>
+                    <p className="text-2xl font-bold text-gray-900">
                       {formatScore(selectedModel.metadata.best_score, selectedModel.metadata.task_type)}
                     </p>
                   </div>
-                  <div className="p-4 bg-purple-50 rounded-lg">
-                    <p className="text-xs text-purple-600 mb-1">Dataset Size</p>
-                    <p className="text-2xl font-bold text-purple-700">
+                  <div className="p-5 bg-gradient-to-br from-gray-100 to-gray-50 rounded-2xl border border-gray-200 shadow-sm">
+                    <p className="text-xs font-medium text-gray-600 mb-2">Dataset Size</p>
+                    <p className="text-2xl font-bold text-gray-900">
                       {selectedModel.metadata.training_data_shape[0].toLocaleString()} rows
                     </p>
                   </div>
-                  <div className="p-4 bg-green-50 rounded-lg">
-                    <p className="text-xs text-green-600 mb-1">Features</p>
-                    <p className="text-2xl font-bold text-green-700">
+                  <div className="p-5 bg-gradient-to-br from-gray-100 to-gray-50 rounded-2xl border border-gray-200 shadow-sm">
+                    <p className="text-xs font-medium text-gray-600 mb-2">Features</p>
+                    <p className="text-2xl font-bold text-gray-900">
                       {selectedModel.metadata.feature_count}
                     </p>
                   </div>
@@ -484,7 +502,7 @@ export default function ModelsPage() {
                           a.click();
                           window.URL.revokeObjectURL(url);
                         }
-                      } catch (error) {
+                      } catch {
                         alert('Download failed');
                       }
                     }}

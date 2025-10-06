@@ -12,20 +12,20 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-1">
-      <div className="mx-auto max-w-7xl">
-        <div className="flex gap-2">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+      <div className="mx-auto max-w-[1920px] px-4 lg:px-6">
+        <div className="flex gap-4 lg:gap-6 py-4">
           {/* Sidebar */}
           <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />
-          
+
           {/* Main content area */}
           <div className="flex-1 min-w-0">
             {/* Header */}
             <Header onMenuClick={() => setSidebarOpen(true)} />
-            
+
             {/* Page content */}
             <main className="mt-6">
-              <div className="bg-white/60 backdrop-blur-sm rounded-xl shadow-sm border border-white/20 p-6 min-h-[calc(100vh-8rem)]">
+              <div className="min-h-[calc(100vh-12rem)]">
                 {children}
               </div>
             </main>

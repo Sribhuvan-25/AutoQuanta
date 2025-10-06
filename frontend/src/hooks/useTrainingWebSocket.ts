@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 export interface TrainingUpdate {
   type: 'progress' | 'metric' | 'log' | 'complete' | 'error' | 'status';
   timestamp: string;
-  data: any;
+  data: unknown;
 }
 
 export interface TrainingMetrics {
@@ -31,7 +31,7 @@ export interface TrainingLog {
 interface UseTrainingWebSocketOptions {
   sessionId: string;
   onUpdate?: (update: TrainingUpdate) => void;
-  onComplete?: (result: any) => void;
+  onComplete?: (result: unknown) => void;
   onError?: (error: string) => void;
   autoConnect?: boolean;
 }
@@ -165,7 +165,7 @@ export function useTrainingWebSocket({
     setStatus('idle');
   };
 
-  const sendCommand = (command: string, data?: any) => {
+  const sendCommand = (command: string, data?: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ command, data }));
     } else {

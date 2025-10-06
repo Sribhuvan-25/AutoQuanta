@@ -182,7 +182,7 @@ export function DistributionPlot({
         <BarChart
           data={histogram}
           margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
-          onMouseMove={(state: any) => {
+          onMouseMove={(state: { activeTooltipIndex?: number }) => {
             if (state?.activeTooltipIndex !== undefined) {
               setSelectedBin(state.activeTooltipIndex);
             }
@@ -211,7 +211,7 @@ export function DistributionPlot({
             }}
           />
           <Tooltip
-            formatter={(value: number, name: string, props: any) => {
+            formatter={(value: number, name: string, props: { payload: { binStart: number; binEnd: number } }) => {
               const bin = props.payload;
               return [
                 `Count: ${value}`,

@@ -78,15 +78,17 @@ export function TrainingResults({
   };
 
   return (
-    <div className={cn('bg-white rounded-lg border border-gray-200', className)}>
+    <div className={cn('bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm', className)}>
       {/* Header */}
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Trophy className="h-6 w-6 text-yellow-500" />
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-gray-100 rounded-xl border border-gray-200">
+              <Trophy className="h-6 w-6 text-gray-900" />
+            </div>
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">Training Results</h3>
-              <p className="text-sm text-gray-600">
+              <h3 className="text-2xl font-semibold text-gray-900">Training Results</h3>
+              <p className="text-sm text-gray-600 mt-1">
                 {modelComparison.length} models trained • Target: {results.training_config.target_column}
               </p>
             </div>
@@ -103,7 +105,7 @@ export function TrainingResults({
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 mt-4">
+        <div className="flex items-center gap-2 mt-6">
           {[
             { key: 'overview', label: 'Overview', icon: BarChart3 },
             { key: 'visualizations', label: 'Visualizations', icon: TrendingUp },
@@ -116,9 +118,9 @@ export function TrainingResults({
                 key={tab.key}
                 onClick={() => setSelectedTab(tab.key as 'overview' | 'models' | 'details' | 'visualizations')}
                 className={cn(
-                  'flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                  'flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-200',
                   selectedTab === tab.key
-                    ? 'bg-blue-100 text-blue-700'
+                    ? 'bg-gray-900 text-white shadow-sm'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 )}
               >
@@ -136,36 +138,38 @@ export function TrainingResults({
           <div className="space-y-6">
             {/* Best Model Card */}
             {bestModel && (
-              <div className="bg-gradient-to-br from-green-50 to-blue-50 p-6 rounded-lg border border-green-200">
+              <div className="bg-gradient-to-br from-gray-100 to-gray-50 p-6 rounded-2xl border border-gray-300 shadow-sm">
                 <div className="flex items-start justify-between">
                   <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Trophy className="h-5 w-5 text-yellow-500" />
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="p-2 bg-white rounded-xl border border-gray-300 shadow-sm">
+                        <Trophy className="h-5 w-5 text-gray-900" />
+                      </div>
                       <h4 className="text-lg font-semibold text-gray-900">Best Model</h4>
                     </div>
-                    <p className="text-2xl font-bold text-green-600">{bestModel?.model_name || 'Unknown'}</p>
+                    <p className="text-2xl font-bold text-gray-900">{bestModel?.model_name || 'Unknown'}</p>
                     {results.training_config.task_type === 'regression' && bestModel?.comprehensive_metrics ? (
-                      <div className="text-sm text-gray-600 mt-1 space-y-1">
-                        <p>R² Score: <span className="font-medium text-blue-600">{bestModel.comprehensive_metrics.r2_score?.toFixed(4)}</span></p>
-                        <p>MSE: <span className="font-medium text-orange-600">{bestModel.comprehensive_metrics.mse?.toFixed(6)}</span></p>
+                      <div className="text-sm text-gray-600 mt-2 space-y-1">
+                        <p>R² Score: <span className="font-semibold text-gray-900">{bestModel.comprehensive_metrics.r2_score?.toFixed(4)}</span></p>
+                        <p>MSE: <span className="font-semibold text-gray-900">{bestModel.comprehensive_metrics.mse?.toFixed(6)}</span></p>
                       </div>
                     ) : bestModel ? (
-                      <div className="text-sm text-gray-600 mt-1 space-y-1">
-                        <p>Accuracy: <span className="font-medium text-blue-600">{formatScore(bestModel.mean_score)}</span></p>
+                      <div className="text-sm text-gray-600 mt-2 space-y-1">
+                        <p>Accuracy: <span className="font-semibold text-gray-900">{formatScore(bestModel.mean_score)}</span></p>
                         {bestModel.comprehensive_metrics?.f1_score && (
-                          <p>F1 Score: <span className="font-medium text-green-600">{(bestModel.comprehensive_metrics.f1_score * 100).toFixed(1)}%</span></p>
+                          <p>F1 Score: <span className="font-semibold text-gray-900">{(bestModel.comprehensive_metrics.f1_score * 100).toFixed(1)}%</span></p>
                         )}
                       </div>
                     ) : (
-                      <div className="text-sm text-gray-600 mt-1">
+                      <div className="text-sm text-gray-600 mt-2">
                         <p>No performance data available</p>
                       </div>
                     )}
                   </div>
                   <div className="text-right space-y-2">
-                    <div className="bg-white px-3 py-2 rounded-lg">
+                    <div className="bg-white px-4 py-3 rounded-xl border border-gray-200 shadow-sm">
                       <p className="text-xs text-gray-600">Training Time</p>
-                      <p className="font-medium">{bestModel ? formatTime(bestModel.training_time) : 'N/A'}</p>
+                      <p className="font-semibold text-gray-900 text-lg mt-1">{bestModel ? formatTime(bestModel.training_time) : 'N/A'}</p>
                     </div>
                   </div>
                 </div>
@@ -174,25 +178,33 @@ export function TrainingResults({
 
             {/* Quick Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-gray-50 p-4 rounded-lg text-center">
-                <Target className="h-5 w-5 text-blue-600 mx-auto mb-2" />
-                <p className="text-sm text-gray-600">Task Type</p>
-                <p className="font-semibold capitalize">{results.training_config.task_type}</p>
+              <div className="bg-white p-5 rounded-xl border border-gray-200 text-center shadow-sm">
+                <div className="p-2 bg-gray-100 rounded-xl border border-gray-200 w-fit mx-auto mb-3">
+                  <Target className="h-5 w-5 text-gray-900" />
+                </div>
+                <p className="text-sm text-gray-600 mb-1">Task Type</p>
+                <p className="font-semibold text-gray-900 capitalize">{results.training_config.task_type}</p>
               </div>
-              <div className="bg-gray-50 p-4 rounded-lg text-center">
-                <BarChart3 className="h-5 w-5 text-green-600 mx-auto mb-2" />
-                <p className="text-sm text-gray-600">Models Trained</p>
-                <p className="font-semibold">{modelComparison.length}</p>
+              <div className="bg-white p-5 rounded-xl border border-gray-200 text-center shadow-sm">
+                <div className="p-2 bg-gray-100 rounded-xl border border-gray-200 w-fit mx-auto mb-3">
+                  <BarChart3 className="h-5 w-5 text-gray-900" />
+                </div>
+                <p className="text-sm text-gray-600 mb-1">Models Trained</p>
+                <p className="font-semibold text-gray-900">{modelComparison.length}</p>
               </div>
-              <div className="bg-gray-50 p-4 rounded-lg text-center">
-                <TrendingUp className="h-5 w-5 text-purple-600 mx-auto mb-2" />
-                <p className="text-sm text-gray-600">CV Folds</p>
-                <p className="font-semibold">{results.training_config.cv_folds}</p>
+              <div className="bg-white p-5 rounded-xl border border-gray-200 text-center shadow-sm">
+                <div className="p-2 bg-gray-100 rounded-xl border border-gray-200 w-fit mx-auto mb-3">
+                  <TrendingUp className="h-5 w-5 text-gray-900" />
+                </div>
+                <p className="text-sm text-gray-600 mb-1">CV Folds</p>
+                <p className="font-semibold text-gray-900">{results.training_config.cv_folds}</p>
               </div>
-              <div className="bg-gray-50 p-4 rounded-lg text-center">
-                <Clock className="h-5 w-5 text-orange-600 mx-auto mb-2" />
-                <p className="text-sm text-gray-600">Total Time</p>
-                <p className="font-semibold">
+              <div className="bg-white p-5 rounded-xl border border-gray-200 text-center shadow-sm">
+                <div className="p-2 bg-gray-100 rounded-xl border border-gray-200 w-fit mx-auto mb-3">
+                  <Clock className="h-5 w-5 text-gray-900" />
+                </div>
+                <p className="text-sm text-gray-600 mb-1">Total Time</p>
+                <p className="font-semibold text-gray-900">
                   {formatTime(modelComparison.reduce((sum, model) => sum + model.training_time, 0))}
                 </p>
               </div>
@@ -234,7 +246,7 @@ export function TrainingResults({
              bestModel?.comprehensive_metrics?.roc_curve &&
              typeof bestModel.comprehensive_metrics.roc_curve === 'object' && (
               <ROCCurveChart
-                rocData={bestModel.comprehensive_metrics.roc_curve as any}
+                rocData={bestModel.comprehensive_metrics.roc_curve as { fpr: number[]; tpr: number[]; auc: number }}
               />
             )}
 
@@ -253,9 +265,9 @@ export function TrainingResults({
             )}
 
             {/* Learning Curve */}
-            {bestModel && 'fold_results' in bestModel && Array.isArray((bestModel as any).fold_results) && (bestModel as any).fold_results.length > 0 && (
+            {bestModel && 'fold_results' in bestModel && Array.isArray(bestModel.fold_results) && bestModel.fold_results.length > 0 && (
               <LearningCurveChart
-                foldResults={(bestModel as any).fold_results}
+                foldResults={bestModel.fold_results}
                 taskType={results.training_config.task_type}
               />
             )}
@@ -282,14 +294,18 @@ export function TrainingResults({
                 <div
                   key={model.model_name}
                   className={cn(
-                    'border rounded-lg p-4 transition-all',
-                    index === 0 ? 'border-green-300 bg-green-50' : 'border-gray-200',
-                    expandedModel === model.model_name && 'ring-2 ring-blue-200'
+                    'border rounded-xl p-5 transition-all duration-200',
+                    index === 0 ? 'border-gray-900 bg-gray-100 shadow-sm' : 'border-gray-200 bg-white',
+                    expandedModel === model.model_name && 'ring-2 ring-gray-300'
                   )}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      {index === 0 && <Trophy className="h-5 w-5 text-yellow-500" />}
+                      {index === 0 && (
+                        <div className="p-1.5 bg-white rounded-lg border border-gray-300">
+                          <Trophy className="h-4 w-4 text-gray-900" />
+                        </div>
+                      )}
                       <div>
                         <h4 className="font-semibold text-gray-900">{model.model_name}</h4>
                         {results.training_config.task_type === 'regression' ? (
@@ -362,17 +378,17 @@ export function TrainingResults({
                   </div>
 
                   {/* Score Bar */}
-                  <div className="mt-3">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="mt-4">
+                    <div className="w-full bg-gray-200 rounded-full h-2.5">
                       <div
                         className={cn(
-                          'h-2 rounded-full transition-all',
-                          index === 0 ? 'bg-green-500' : 'bg-blue-500'
+                          'h-2.5 rounded-full transition-all duration-300',
+                          index === 0 ? 'bg-gray-900' : 'bg-gray-600'
                         )}
-                        style={{ 
-                          width: `${results.training_config.task_type === 'regression' 
-                            ? Math.max(0, Math.min(100, (model.mean_score + 1) * 50)) 
-                            : model.mean_score * 100}%` 
+                        style={{
+                          width: `${results.training_config.task_type === 'regression'
+                            ? Math.max(0, Math.min(100, (model.mean_score + 1) * 50))
+                            : model.mean_score * 100}%`
                         }}
                       />
                     </div>

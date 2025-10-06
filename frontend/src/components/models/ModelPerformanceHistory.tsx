@@ -149,7 +149,7 @@ export function ModelPerformanceHistory({
     );
   }
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: { version: string; timestamp: string }; dataKey: string; value: number; color: string }>; label?: string }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
@@ -159,7 +159,7 @@ export function ModelPerformanceHistory({
           </p>
           <p className="text-xs text-gray-500 mb-2">{data.timestamp}</p>
           <div className="space-y-1">
-            {payload.map((entry: any) => (
+            {payload.map((entry: { dataKey: string; value: number; color: string }) => (
               <div key={entry.dataKey} className="flex items-center justify-between gap-3">
                 <span className="text-xs text-gray-600 capitalize">
                   {entry.dataKey}:

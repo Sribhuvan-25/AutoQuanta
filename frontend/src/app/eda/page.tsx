@@ -2,7 +2,6 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileUpload } from '@/components/common/FileUpload';
 import { DataTable } from '@/components/data/DataTable';
 import { AdvancedColumnCard } from '@/components/data/AdvancedColumnCard';
 import { ColumnDistribution } from '@/components/data/ColumnDistribution';
@@ -10,7 +9,7 @@ import { CorrelationHeatmap } from '@/components/data/CorrelationHeatmap';
 import { DataQualityReport } from '@/components/data/DataQualityReport';
 import { Button } from '@/components/ui/button';
 import { DataProcessingIndicator } from '@/components/ui/loading';
-import { AlertTriangle, CheckCircle, Info, Download, Upload } from 'lucide-react';
+import { AlertTriangle, Info, Download, Upload } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { 
@@ -29,7 +28,6 @@ import {
   selectQualityReport,
   selectAdvancedColumns
 } from '@/store/slices/dataSlice';
-import { setTrainingConfig } from '@/store/slices/trainingSlice';
 
 
 export default function EDAPage() {
@@ -47,31 +45,6 @@ export default function EDAPage() {
   const statisticalSummary = useAppSelector(selectStatisticalSummary);
   const qualityReport = useAppSelector(selectQualityReport);
   const advancedColumns = useAppSelector(selectAdvancedColumns);
-
-  const handleContinueToTraining = () => {
-    if (targetColumn) {
-      dispatch(setTrainingConfig({
-        target_column: targetColumn,
-        task_type: 'classification',
-        test_size: 0.2,
-        cv_folds: 5,
-        random_seed: 42,
-        models_to_try: ['random_forest', 'gradient_boosting']
-      }));
-      router.push('/train');
-    }
-  };
-
-  const handleFileSelect = useCallback(async (filePath: string, fileInfo?: { name: string; size: number; type: string }) => {
-    try {
-      if (fileInfo) {
-        // For now, still use old method, but we'll add new API-based method soon
-        await dispatch(processCSVFile({ filePath, fileInfo }));
-      }
-    } catch (error) {
-      console.error('Error processing file:', error);
-    }
-  }, [dispatch]);
 
   // New API-based file upload handler
   const handleAPIFileUpload = useCallback(async (file: File) => {
@@ -109,14 +82,6 @@ export default function EDAPage() {
     }
   }, [currentDataset, isProcessing, dispatch]);
 
-  const handleFileUploadError = useCallback((error: string) => {
-    setValidationErrors([error]);
-  }, []);
-
-  const handleValidationFailed = useCallback((errors: string[]) => {
-    setValidationErrors(errors);
-  }, []);
-
   const handleTargetSelect = useCallback((columnName: string) => {
     dispatch(setDataTargetColumn(columnName));
   }, [dispatch]);
@@ -131,22 +96,24 @@ export default function EDAPage() {
       <div className="space-y-8">
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Data Explorer</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-4xl font-bold tracking-tight text-gray-900">Data Explorer</h1>
+          <p className="text-lg text-gray-600 mt-3 max-w-3xl">
             Upload and explore your CSV data to understand its structure and quality.
           </p>
         </div>
 
         {/* Validation Errors */}
         {validationErrors.length > 0 && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center gap-x-2 mb-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              <h3 className="text-sm font-medium text-red-800">Validation Errors</h3>
+          <div className="bg-white/60 backdrop-blur-2xl border border-red-200 rounded-2xl shadow-sm p-6">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="p-3 bg-red-50 rounded-xl border border-red-200">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-900">Validation Errors</h3>
             </div>
-            <ul className="list-disc list-inside space-y-1">
+            <ul className="list-disc list-inside space-y-2">
               {validationErrors.map((error, index) => (
-                <li key={index} className="text-sm text-red-700">{error}</li>
+                <li key={index} className="text-sm text-gray-700">{error}</li>
               ))}
             </ul>
           </div>
@@ -154,10 +121,10 @@ export default function EDAPage() {
 
         {/* File Upload */}
         {!currentDataset && !isProcessing && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-8">
             {/* Simple API-based file upload */}
             <div className="text-center">
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8">
+              <div className="border-2 border-dashed border-gray-300 rounded-2xl p-12 hover:border-gray-400 transition-colors">
                 <input
                   type="file"
                   accept=".csv"
@@ -172,12 +139,14 @@ export default function EDAPage() {
                 />
                 <label htmlFor="csv-file-input" className="cursor-pointer">
                   <div className="flex flex-col items-center">
-                    <Upload className="h-12 w-12 text-gray-400 mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">Upload CSV File</h3>
-                    <p className="text-gray-600 mb-4">
+                    <div className="p-4 bg-gray-100 rounded-2xl border border-gray-200 mb-6">
+                      <Upload className="h-12 w-12 text-gray-900" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-3">Upload CSV File</h3>
+                    <p className="text-gray-600 mb-6 max-w-md">
                       Click to select your CSV file for analysis
                     </p>
-                    <Button type="button">
+                    <Button type="button" size="lg">
                       Choose File
                     </Button>
                   </div>
@@ -198,12 +167,16 @@ export default function EDAPage() {
 
         {/* Error State */}
         {dataError && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-            <div className="flex items-center gap-x-3 mb-4">
-              <AlertTriangle className="h-6 w-6 text-red-500" />
-              <h3 className="text-lg font-semibold text-red-900">Processing Failed</h3>
+          <div className="bg-white/60 backdrop-blur-2xl border border-red-200 rounded-2xl shadow-sm p-6">
+            <div className="flex items-start gap-4 mb-4">
+              <div className="p-3 bg-red-50 rounded-xl border border-red-200">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Processing Failed</h3>
+                <p className="text-sm text-gray-600 mt-2">{dataError}</p>
+              </div>
             </div>
-            <p className="text-sm text-red-700 mb-4">{dataError}</p>
             <Button onClick={handleReset} variant="outline">
               Try Again
             </Button>
@@ -214,18 +187,18 @@ export default function EDAPage() {
         {currentDataset && !isProcessing && (
           <div className="space-y-6">
             {/* File Info */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
+            <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Data Overview</h2>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <h2 className="text-xl font-semibold text-gray-900">Data Overview</h2>
+                  <p className="text-sm text-gray-600 mt-2">
                     {currentDataset.fileName} • {currentDataset.metadata.rowCount.toLocaleString()} rows • {currentDataset.metadata.columnCount} columns
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
                     File size: {(currentDataset.metadata.fileSize / 1024).toFixed(1)} KB
                   </p>
                 </div>
-                <div className="flex gap-x-2">
+                <div className="flex gap-3">
                   <Button variant="outline" onClick={handleReset}>
                     Upload New File
                   </Button>
@@ -239,21 +212,23 @@ export default function EDAPage() {
 
             {/* Warnings */}
             {(dataWarnings.length > 0 || currentDataset.warnings.length > 0) && (
-              <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Data Quality Insights</h3>
-                <div className="space-y-3">
+              <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+                <h3 className="text-xl font-semibold text-gray-900 mb-6">Data Quality Insights</h3>
+                <div className="space-y-4">
                   {[...dataWarnings, ...currentDataset.warnings].map((warning, index) => (
-                    <div key={index} className="flex items-start gap-x-3">
-                      {warning.type === 'warning' && <AlertTriangle className="h-5 w-5 text-yellow-500 mt-0.5" />}
-                      {warning.type === 'info' && <Info className="h-5 w-5 text-blue-500 mt-0.5" />}
-                      {warning.type === 'error' && <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />}
+                    <div key={index} className="flex items-start gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                      <div className="p-2 bg-white rounded-lg border border-gray-200">
+                        {warning.type === 'warning' && <AlertTriangle className="h-5 w-5 text-orange-600" />}
+                        {warning.type === 'info' && <Info className="h-5 w-5 text-gray-700" />}
+                        {warning.type === 'error' && <AlertTriangle className="h-5 w-5 text-red-600" />}
+                      </div>
                       <div className="flex-1">
-                        <p className="text-sm text-gray-900">{warning.message}</p>
+                        <p className="text-sm text-gray-900 font-medium">{warning.message}</p>
                         {warning.column && (
-                          <p className="text-xs text-gray-500 mt-1">Column: {warning.column}</p>
+                          <p className="text-xs text-gray-600 mt-1">Column: {warning.column}</p>
                         )}
                         {warning.suggestion && (
-                          <p className="text-xs text-blue-600 mt-1">💡 {warning.suggestion}</p>
+                          <p className="text-xs text-gray-700 mt-2">💡 {warning.suggestion}</p>
                         )}
                       </div>
                     </div>
@@ -263,10 +238,10 @@ export default function EDAPage() {
             )}
 
             {/* Data Preview */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Data Preview</h3>
-                <div className="text-xs text-gray-500">
+            <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900">Data Preview</h3>
+                <div className="text-sm text-gray-600">
                   Showing first {Math.min(100, currentDataset.rows.length)} rows
                 </div>
               </div>
@@ -282,8 +257,8 @@ export default function EDAPage() {
             )}
 
             {/* Advanced Column Analysis */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Advanced Column Analysis</h3>
+            <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+              <h3 className="text-xl font-semibold text-gray-900 mb-6">Advanced Column Analysis</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {(advancedColumns || currentDataset.columns).map((column) => (
                   <AdvancedColumnCard
@@ -297,24 +272,24 @@ export default function EDAPage() {
             </div>
 
             {/* Data Visualizations */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Data Visualizations</h3>
-              
+            <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+              <h3 className="text-xl font-semibold text-gray-900 mb-6">Data Visualizations</h3>
+
               {/* Column Distributions */}
               <div className="mb-8">
-                <h4 className="text-md font-medium text-gray-800 mb-4">Column Distributions</h4>
+                <h4 className="text-base font-semibold text-gray-900 mb-5">Column Distributions</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {currentDataset.columns.slice(0, 6).map((column) => (
-                    <div key={column.name} className="bg-gray-50 rounded-lg p-4">
-                      <ColumnDistribution 
-                        column={column} 
+                    <div key={column.name} className="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                      <ColumnDistribution
+                        column={column}
                         data={currentDataset.data}
                       />
                     </div>
                   ))}
                 </div>
                 {currentDataset.columns.length > 6 && (
-                  <div className="text-center mt-4">
+                  <div className="text-center mt-6">
                     <Button variant="outline" size="sm">
                       Show All Distributions ({currentDataset.columns.length - 6} more)
                     </Button>
@@ -324,8 +299,8 @@ export default function EDAPage() {
 
               {/* Correlation Analysis */}
               <div>
-                <h4 className="text-md font-medium text-gray-800 mb-4">Correlation Analysis</h4>
-                <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="text-base font-semibold text-gray-900 mb-5">Correlation Analysis</h4>
+                <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
                   <CorrelationHeatmap data={currentDataset.data} />
                 </div>
               </div>

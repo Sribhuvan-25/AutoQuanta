@@ -209,7 +209,7 @@ export function ModelComparisonChart({
           <RadarChart data={radarChartData[0] ? Object.keys(radarChartData[0])
             .filter(key => key !== 'model')
             .map(metric => {
-              const dataPoint: any = { metric };
+              const dataPoint: Record<string, unknown> = { metric };
               radarChartData.forEach(model => {
                 dataPoint[model.model] = model[metric as keyof typeof model];
               });

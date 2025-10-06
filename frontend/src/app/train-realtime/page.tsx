@@ -64,7 +64,7 @@ export default function RealtimeTrainingPage() {
     }
   };
 
-  const handleTrainingComplete = (data: any) => {
+  const handleTrainingComplete = (data: unknown) => {
     console.log('Training completed:', data);
     alert('Training completed successfully!');
   };

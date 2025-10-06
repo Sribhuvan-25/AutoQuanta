@@ -93,7 +93,7 @@ export function FeatureImportanceChart({
 
       {/* Description */}
       <p className="text-sm text-gray-600 mb-4">
-        Shows which features had the most influence on the model's predictions
+        Shows which features had the most influence on the model&apos;s predictions
       </p>
 
       {/* Chart */}

@@ -46,7 +46,7 @@ export function Sidebar({ open, setOpen }: SidebarProps) {
       {/* Sidebar */}
       <div
         className={cn(
-          'fixed inset-y-1 left-1 z-50 bg-gradient-to-b from-slate-50 to-slate-100 rounded-xl shadow-xl transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 lg:rounded-xl lg:shadow-lg border border-slate-200',
+          'fixed inset-y-4 left-4 z-50 bg-white/80 backdrop-blur-lg border border-white/40 rounded-2xl shadow-xl transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0',
           // Width transitions
           isExpanded ? 'w-72' : 'w-16 lg:w-16',
           // Mobile transform
@@ -105,10 +105,10 @@ export function Sidebar({ open, setOpen }: SidebarProps) {
                   <Link
                     href={item.href}
                     className={cn(
-                      'group flex items-center gap-x-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 relative',
+                      'group flex items-center gap-x-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 relative',
                       isActive
-                        ? 'bg-blue-100 text-blue-700 shadow-sm'
-                        : 'text-slate-700 hover:bg-slate-200/50 hover:text-slate-900'
+                        ? 'bg-black text-white shadow-sm'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                     )}
                     onClick={() => setOpen(false)}
                     title={!isExpanded ? item.name : undefined}
@@ -116,7 +116,7 @@ export function Sidebar({ open, setOpen }: SidebarProps) {
                     <item.icon
                       className={cn(
                         'h-5 w-5 flex-shrink-0 transition-colors',
-                        isActive ? 'text-blue-700' : 'text-slate-500 group-hover:text-slate-700'
+                        isActive ? 'text-white' : 'text-gray-500 group-hover:text-gray-700'
                       )}
                     />
                     <span
@@ -127,9 +127,6 @@ export function Sidebar({ open, setOpen }: SidebarProps) {
                     >
                       {item.name}
                     </span>
-                    {isActive && (
-                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-600 rounded-l-full" />
-                    )}
                   </Link>
                 </li>
               );
@@ -140,16 +137,16 @@ export function Sidebar({ open, setOpen }: SidebarProps) {
         {/* Bottom section */}
         <div className="p-3">
           <div className={cn(
-            "rounded-lg bg-slate-200/50 border border-slate-300/50 transition-all duration-300",
+            "rounded-xl bg-gray-100 border border-gray-200 transition-all duration-300",
             isExpanded ? "p-3" : "p-2"
           )}>
             <div className="flex items-center gap-x-2">
-              <div className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0"></div>
+              <div className="h-2 w-2 rounded-full bg-gray-900 flex-shrink-0"></div>
               {isExpanded && (
                 <div className="overflow-hidden">
-                  <span className="text-xs font-medium text-slate-700 whitespace-nowrap">Local-only mode</span>
-                  <p className="text-xs text-slate-500 whitespace-nowrap">
-                    All data stays on your machine
+                  <span className="text-xs font-medium text-gray-900 whitespace-nowrap">Local-only</span>
+                  <p className="text-xs text-gray-600 whitespace-nowrap">
+                    Data stays on your machine
                   </p>
                 </div>
               )}

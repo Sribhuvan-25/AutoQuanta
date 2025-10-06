@@ -51,7 +51,7 @@ export function Header({ onMenuClick }: HeaderProps) {
     setShowProjectDropdown(false);
   };
 
-  const handleProjectCreated = (projectConfig: any) => {
+  const handleProjectCreated = (projectConfig: Record<string, unknown>) => {
     dispatch(hideCreateWizard());
     // Project will be automatically loaded via the Redux action
   };
@@ -63,7 +63,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   return (
     <>
-      <header className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <header className="bg-white/80 backdrop-blur-lg border border-white/40 rounded-2xl shadow-sm p-4">
         <div className="flex items-center gap-x-4">
           {/* Mobile menu button */}
           <Button
@@ -84,7 +84,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             <div className="flex flex-1 items-center gap-x-4 lg:gap-x-6">
               <div className="flex items-center gap-x-2">
                 <h1 className="text-lg font-semibold text-gray-900">AutoQuanta</h1>
-                <span className="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+                <span className="inline-flex items-center rounded-lg bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 border border-gray-200">
                   Local-only
                 </span>
               </div>
@@ -189,9 +189,9 @@ export function Header({ onMenuClick }: HeaderProps) {
           <div className="flex items-center gap-x-2">
             {/* Current project indicator (simplified) */}
             {currentProject && (
-              <div className="flex items-center gap-2 px-2 py-1 bg-green-50 rounded-md">
-                <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-                <span className="text-xs font-medium text-green-700">Project Active</span>
+              <div className="flex items-center gap-2 px-2 py-1 bg-gray-100 rounded-lg border border-gray-200">
+                <div className="h-2 w-2 bg-gray-900 rounded-full"></div>
+                <span className="text-xs font-medium text-gray-700">Project Active</span>
               </div>
             )}
 

@@ -2,7 +2,6 @@
 
 import React from 'react';
 import {
-  LineChart,
   Line,
   XAxis,
   YAxis,
@@ -36,7 +35,7 @@ export function LearningCurveChart({
 }: LearningCurveChartProps) {
 
   // Prepare chart data
-  const chartData = foldResults.map((fold, index) => ({
+  const chartData = foldResults.map((fold) => ({
     fold: `Fold ${fold.fold_idx + 1}`,
     trainScore: fold.train_score * (taskType === 'regression' ? 1 : 100),
     valScore: fold.val_score * (taskType === 'regression' ? 1 : 100),
