@@ -21,14 +21,14 @@ interface Project {
   status: 'active' | 'archived';
 }
 
-interface Project {
+interface APIProject {
   id: string;
   name: string;
   description: string;
-  createdAt: string;
-  lastModified: string;
-  fileCount: number;
-  status: 'active' | 'archived';
+  created_at: number;
+  updated_at: number;
+  files?: { name: string; path: string }[];
+  status: string;
 }
 
 export default function ProjectPage() {
@@ -84,7 +84,7 @@ export default function ProjectPage() {
       
       if (data.success) {
         // Convert API format to frontend format
-        const formattedProjects: Project[] = data.projects.map((proj: any) => ({
+        const formattedProjects: Project[] = data.projects.map((proj: APIProject) => ({
           id: proj.id,
           name: proj.name,
           description: proj.description,
@@ -173,29 +173,6 @@ export default function ProjectPage() {
       setIsCreatingProject(false);
     }
   };
-
-  // Create new project (legacy function for API compatibility)
-  const createProject = useCallback(async (name: string, description: string) => {
-    try {
-      const response = await fetch('http://localhost:8000/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description })
-      });
-      
-      const data = await response.json();
-      if (data.success) {
-        loadProjects(); // Refresh list
-        return data.project;
-      } else {
-        throw new Error(data.error || 'Failed to create project');
-      }
-    } catch (error) {
-      console.error('Failed to create project:', error);
-      setError(error instanceof Error ? error.message : 'Failed to create project');
-      throw error;
-    }
-  }, [loadProjects]);
 
   const handleValidationFailed = useCallback((errors: string[]) => {
     setError(errors[0] || 'File validation failed');

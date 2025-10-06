@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 
 export interface TrainingEvent {
   type: 'connected' | 'progress' | 'metric' | 'log' | 'status' | 'complete' | 'error' | 'ping';
-  data?: any;
+  data?: unknown;
   timestamp: number;
   session_id?: string;
 }
@@ -15,7 +15,7 @@ export interface TrainingProgress {
 
 export interface TrainingMetric {
   metric: string;
-  value: any;
+  value: unknown;
   model_name?: string;
   std_score?: number;
 }
@@ -31,7 +31,7 @@ interface UseTrainingSSEOptions {
   onProgress?: (progress: TrainingProgress) => void;
   onMetric?: (metric: TrainingMetric) => void;
   onLog?: (log: TrainingLog) => void;
-  onComplete?: (data: any) => void;
+  onComplete?: (data: unknown) => void;
   onError?: (error: string) => void;
   autoConnect?: boolean;
 }

@@ -7,9 +7,9 @@ import { X, Database, Check, Zap } from 'lucide-react';
 interface ModelSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  availableModels: any[];
-  selectedModel: any;
-  onSelectModel: (model: any) => void;
+  availableModels: Array<Record<string, unknown>>;
+  selectedModel: Record<string, unknown> | null;
+  onSelectModel: (model: Record<string, unknown>) => void;
 }
 
 export function ModelSelectionModal({

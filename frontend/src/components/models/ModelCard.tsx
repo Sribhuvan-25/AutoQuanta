@@ -5,7 +5,6 @@ import { cn } from '@/lib/utils';
 import {
   Brain,
   Calendar,
-  TrendingUp,
   Target,
   Layers,
   Clock,

@@ -246,7 +246,7 @@ export function TrainingResults({
              bestModel?.comprehensive_metrics?.roc_curve &&
              typeof bestModel.comprehensive_metrics.roc_curve === 'object' && (
               <ROCCurveChart
-                rocData={bestModel.comprehensive_metrics.roc_curve as any}
+                rocData={bestModel.comprehensive_metrics.roc_curve as { fpr: number[]; tpr: number[]; auc: number }}
               />
             )}
 
@@ -265,9 +265,9 @@ export function TrainingResults({
             )}
 
             {/* Learning Curve */}
-            {bestModel && 'fold_results' in bestModel && Array.isArray((bestModel as any).fold_results) && (bestModel as any).fold_results.length > 0 && (
+            {bestModel && 'fold_results' in bestModel && Array.isArray(bestModel.fold_results) && bestModel.fold_results.length > 0 && (
               <LearningCurveChart
-                foldResults={(bestModel as any).fold_results}
+                foldResults={bestModel.fold_results}
                 taskType={results.training_config.task_type}
               />
             )}

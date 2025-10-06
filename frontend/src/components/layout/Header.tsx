@@ -51,7 +51,7 @@ export function Header({ onMenuClick }: HeaderProps) {
     setShowProjectDropdown(false);
   };
 
-  const handleProjectCreated = (projectConfig: any) => {
+  const handleProjectCreated = (projectConfig: Record<string, unknown>) => {
     dispatch(hideCreateWizard());
     // Project will be automatically loaded via the Redux action
   };

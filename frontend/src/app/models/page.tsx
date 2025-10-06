@@ -43,6 +43,22 @@ interface SavedModel {
   created_date: Date;
 }
 
+interface APIModel {
+  model_name: string;
+  export_timestamp: string;
+  best_model_type: string;
+  best_score: number;
+  task_type: 'classification' | 'regression';
+  target_column: string;
+  feature_count: number;
+  training_data_shape: [number, number];
+  cv_folds: number;
+  models_trained: string[];
+  model_path: string;
+  metadata_path: string;
+  size_mb: number;
+}
+
 export default function ModelsPage() {
   const [models, setModels] = useState<SavedModel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +84,7 @@ export default function ModelsPage() {
       
       if (data.success && data.models) {
         // Convert API response to SavedModel format
-        const formattedModels: SavedModel[] = data.models.map((model: any) => ({
+        const formattedModels: SavedModel[] = data.models.map((model: APIModel) => ({
           metadata: {
             model_name: model.model_name,
             export_timestamp: model.export_timestamp,
@@ -244,7 +260,7 @@ export default function ModelsPage() {
                   </div>
                   <select
                     value={filterTaskType}
-                    onChange={(e) => setFilterTaskType(e.target.value as any)}
+                    onChange={(e) => setFilterTaskType(e.target.value as 'all' | 'classification' | 'regression')}
                     className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white"
                   >
                     <option value="all">All Tasks</option>
@@ -256,7 +272,7 @@ export default function ModelsPage() {
                 {/* Sort By */}
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
+                  onChange={(e) => setSortBy(e.target.value as 'date' | 'score' | 'name')}
                   className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white"
                 >
                   <option value="date">Sort by Date</option>
@@ -368,7 +384,7 @@ export default function ModelsPage() {
                       if (response.ok) {
                         loadModels();
                       }
-                    } catch (error) {
+                    } catch {
                       alert('Failed to delete model');
                     }
                   }
@@ -392,7 +408,7 @@ export default function ModelsPage() {
                     } else {
                       alert('Download failed');
                     }
-                  } catch (error) {
+                  } catch {
                     alert('Download failed');
                   }
                 }}
@@ -486,7 +502,7 @@ export default function ModelsPage() {
                           a.click();
                           window.URL.revokeObjectURL(url);
                         }
-                      } catch (error) {
+                      } catch {
                         alert('Download failed');
                       }
                     }}

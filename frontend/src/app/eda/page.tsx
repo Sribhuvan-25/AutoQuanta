@@ -2,7 +2,6 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileUpload } from '@/components/common/FileUpload';
 import { DataTable } from '@/components/data/DataTable';
 import { AdvancedColumnCard } from '@/components/data/AdvancedColumnCard';
 import { ColumnDistribution } from '@/components/data/ColumnDistribution';
@@ -10,7 +9,7 @@ import { CorrelationHeatmap } from '@/components/data/CorrelationHeatmap';
 import { DataQualityReport } from '@/components/data/DataQualityReport';
 import { Button } from '@/components/ui/button';
 import { DataProcessingIndicator } from '@/components/ui/loading';
-import { AlertTriangle, CheckCircle, Info, Download, Upload } from 'lucide-react';
+import { AlertTriangle, Info, Download, Upload } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { 
@@ -29,7 +28,6 @@ import {
   selectQualityReport,
   selectAdvancedColumns
 } from '@/store/slices/dataSlice';
-import { setTrainingConfig } from '@/store/slices/trainingSlice';
 
 
 export default function EDAPage() {
@@ -47,31 +45,6 @@ export default function EDAPage() {
   const statisticalSummary = useAppSelector(selectStatisticalSummary);
   const qualityReport = useAppSelector(selectQualityReport);
   const advancedColumns = useAppSelector(selectAdvancedColumns);
-
-  const handleContinueToTraining = () => {
-    if (targetColumn) {
-      dispatch(setTrainingConfig({
-        target_column: targetColumn,
-        task_type: 'classification',
-        test_size: 0.2,
-        cv_folds: 5,
-        random_seed: 42,
-        models_to_try: ['random_forest', 'gradient_boosting']
-      }));
-      router.push('/train');
-    }
-  };
-
-  const handleFileSelect = useCallback(async (filePath: string, fileInfo?: { name: string; size: number; type: string }) => {
-    try {
-      if (fileInfo) {
-        // For now, still use old method, but we'll add new API-based method soon
-        await dispatch(processCSVFile({ filePath, fileInfo }));
-      }
-    } catch (error) {
-      console.error('Error processing file:', error);
-    }
-  }, [dispatch]);
 
   // New API-based file upload handler
   const handleAPIFileUpload = useCallback(async (file: File) => {
@@ -108,14 +81,6 @@ export default function EDAPage() {
       }
     }
   }, [currentDataset, isProcessing, dispatch]);
-
-  const handleFileUploadError = useCallback((error: string) => {
-    setValidationErrors([error]);
-  }, []);
-
-  const handleValidationFailed = useCallback((errors: string[]) => {
-    setValidationErrors(errors);
-  }, []);
 
   const handleTargetSelect = useCallback((columnName: string) => {
     dispatch(setDataTargetColumn(columnName));

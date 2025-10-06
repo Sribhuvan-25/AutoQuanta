@@ -141,8 +141,8 @@ export const startTraining = createAsyncThunk(
                         }
                         
                         // Mark as saved in the result
-                        (results as any).projectSaved = true;
-                        (results as any).projectSavePath = saveResult.resultPath;
+                        (results as Record<string, unknown>).projectSaved = true;
+                        (results as Record<string, unknown>).projectSavePath = saveResult.resultPath;
                       } else {
                         console.warn('Failed to save training results to project:', saveResult.error);
                       }
@@ -308,7 +308,7 @@ const trainingSlice = createSlice({
         state.error = null;
         
         // Check if results were saved to project
-        const results = action.payload as any;
+        const results = action.payload as Record<string, unknown>;
         if (results.projectSaved) {
           state.resultsSavedToProject = true;
           state.projectSavePath = results.projectSavePath;

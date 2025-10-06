@@ -9,7 +9,7 @@ import type { CreateProjectRequest } from '@/lib/project-types';
 interface ProjectCreationWizardProps {
   isOpen: boolean;
   onClose: () => void;
-  onProjectCreated: (projectConfig: any) => void;
+  onProjectCreated: (projectConfig: Record<string, unknown>) => void;
 }
 
 interface FormData {

@@ -49,7 +49,7 @@ export default function TrainPage() {
   const projectSavePath = useAppSelector(selectProjectSavePath);
   
   const [showResults, setShowResults] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<any>(null);
+  const [selectedModel, setSelectedModel] = useState<ModelTrainingResult | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleStartTraining = async (config: TrainingConfigType) => {

@@ -4,13 +4,12 @@ import React, { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PredictionResults } from '@/components/prediction/PredictionResults';
 import { PredictionProgress } from '@/components/prediction/PredictionProgress';
-import { CSVValidator, CSVValidationDisplay } from '@/components/prediction/CSVValidator';
+import { CSVValidator, CSVValidationDisplay, type CSVValidationResult } from '@/components/prediction/CSVValidator';
 import { ModelSelectionModal } from '@/components/prediction/ModelSelectionModal';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import {
   loadAvailableModels,
   selectModel,
-  clearSelectedModel,
   setInputData,
   clearInputData,
   makePrediction,
@@ -31,7 +30,7 @@ import {
   selectShowResults,
 } from '@/store/slices/predictionSlice';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, RefreshCw, Upload, FileText, Calculator, Database, Zap, Download, Play, ChevronDown, Check } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Upload, FileText, Calculator, Database, Zap, Play, ChevronDown, Check } from 'lucide-react';
 
 export default function PredictPage() {
   const dispatch = useAppDispatch();
@@ -54,7 +53,7 @@ export default function PredictPage() {
   const [inputMode, setInputMode] = useState<'csv' | 'manual'>('csv');
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [manualValues, setManualValues] = useState<string[]>([]);
-  const [csvValidation, setCsvValidation] = useState<any>(null);
+  const [csvValidation, setCsvValidation] = useState<CSVValidationResult | null>(null);
   const [isModelModalOpen, setIsModelModalOpen] = useState(false);
   
   // Load models on component mount

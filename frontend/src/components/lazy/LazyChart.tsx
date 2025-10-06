@@ -29,7 +29,7 @@ function ChartLoadingFallback({ height = '300px', message = 'Loading visualizati
 }
 
 // Lazy-loaded chart wrapper components
-export function LazyBarChartWrapper(props: any) {
+export function LazyBarChartWrapper(props: Record<string, unknown>) {
   return (
     <Suspense fallback={<ChartLoadingFallback />}>
       <LazyBarChart {...props} />
@@ -37,7 +37,7 @@ export function LazyBarChartWrapper(props: any) {
   );
 }
 
-export function LazyLineChartWrapper(props: any) {
+export function LazyLineChartWrapper(props: Record<string, unknown>) {
   return (
     <Suspense fallback={<ChartLoadingFallback />}>
       <LazyLineChart {...props} />
@@ -45,7 +45,7 @@ export function LazyLineChartWrapper(props: any) {
   );
 }
 
-export function LazyScatterPlotWrapper(props: any) {
+export function LazyScatterPlotWrapper(props: Record<string, unknown>) {
   return (
     <Suspense fallback={<ChartLoadingFallback />}>
       <LazyScatterPlot {...props} />
@@ -53,7 +53,7 @@ export function LazyScatterPlotWrapper(props: any) {
   );
 }
 
-export function LazyHeatmapWrapper(props: any) {
+export function LazyHeatmapWrapper(props: Record<string, unknown>) {
   return (
     <Suspense fallback={<ChartLoadingFallback />}>
       <LazyHeatmap {...props} />

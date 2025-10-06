@@ -227,7 +227,7 @@ export function ResidualPlot({
           <Scatter
             data={chartData}
             fill="#3b82f6"
-            shape={(props: any) => {
+            shape={(props: { cx: number; cy: number; payload: { residual: number } }) => {
               const { cx, cy, payload } = props;
               const color = getPointColor(payload.residual);
               return (

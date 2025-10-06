@@ -136,7 +136,7 @@ export const loadAvailableModels = createAsyncThunk(
       }
       
       return result.models;
-    } catch (error: any) {
+    } catch (error: unknown) {
       return rejectWithValue(error.message || 'Failed to load available models');
     }
   }
@@ -173,7 +173,7 @@ export const makePrediction = createAsyncThunk(
       }
       
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       return rejectWithValue(error.message || 'Prediction failed');
     }
   }
@@ -201,7 +201,7 @@ export const makeSinglePrediction = createAsyncThunk(
       }
       
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       return rejectWithValue(error.message || 'Single prediction failed');
     }
   }
@@ -387,16 +387,18 @@ export const {
 export default predictionSlice.reducer;
 
 // Selectors
-export const selectAvailableModels = (state: any) => state.prediction.availableModels;
-export const selectIsLoadingModels = (state: any) => state.prediction.isLoadingModels;
-export const selectModelsError = (state: any) => state.prediction.modelsError;
-export const selectSelectedModel = (state: any) => state.prediction.selectedModel;
-export const selectInputData = (state: any) => state.prediction.inputData;
-export const selectIsPredicting = (state: any) => state.prediction.isPredicting;
-export const selectPredictionProgress = (state: any) => state.prediction.predictionProgress;
-export const selectPredictionStage = (state: any) => state.prediction.predictionStage;
-export const selectPredictionResults = (state: any) => state.prediction.predictionResults;
-export const selectSinglePredictionResult = (state: any) => state.prediction.singlePredictionResult;
-export const selectPredictionError = (state: any) => state.prediction.predictionError;
-export const selectShowResults = (state: any) => state.prediction.showResults;
-export const selectPredictionHistory = (state: any) => state.prediction.predictionHistory;
+import type { RootState } from '../index';
+
+export const selectAvailableModels = (state: RootState) => state.prediction.availableModels;
+export const selectIsLoadingModels = (state: RootState) => state.prediction.isLoadingModels;
+export const selectModelsError = (state: RootState) => state.prediction.modelsError;
+export const selectSelectedModel = (state: RootState) => state.prediction.selectedModel;
+export const selectInputData = (state: RootState) => state.prediction.inputData;
+export const selectIsPredicting = (state: RootState) => state.prediction.isPredicting;
+export const selectPredictionProgress = (state: RootState) => state.prediction.predictionProgress;
+export const selectPredictionStage = (state: RootState) => state.prediction.predictionStage;
+export const selectPredictionResults = (state: RootState) => state.prediction.predictionResults;
+export const selectSinglePredictionResult = (state: RootState) => state.prediction.singlePredictionResult;
+export const selectPredictionError = (state: RootState) => state.prediction.predictionError;
+export const selectShowResults = (state: RootState) => state.prediction.showResults;
+export const selectPredictionHistory = (state: RootState) => state.prediction.predictionHistory;

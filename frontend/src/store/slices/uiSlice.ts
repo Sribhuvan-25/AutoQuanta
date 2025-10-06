@@ -305,14 +305,16 @@ export const {
 export default uiSlice.reducer;
 
 // Selectors
-export const selectIsLoading = (state: any) => state.ui.isLoading;
-export const selectLoadingMessage = (state: any) => state.ui.loadingMessage;
-export const selectActiveTab = (state: any) => state.ui.activeTab;
-export const selectBreadcrumbs = (state: any) => state.ui.breadcrumbs;
-export const selectSidebar = (state: any) => state.ui.sidebar;
-export const selectModal = (state: any) => state.ui.modal;
-export const selectNotifications = (state: any) => state.ui.notifications;
-export const selectTableView = (state: any) => state.ui.tableView;
-export const selectVisualizationSettings = (state: any) => state.ui.visualizationSettings;
-export const selectPanels = (state: any) => state.ui.panels;
-export const selectLayout = (state: any) => state.ui.layout;
+import type { RootState } from '../index';
+
+export const selectIsLoading = (state: RootState) => state.ui.isLoading;
+export const selectLoadingMessage = (state: RootState) => state.ui.loadingMessage;
+export const selectActiveTab = (state: RootState) => state.ui.activeTab;
+export const selectBreadcrumbs = (state: RootState) => state.ui.breadcrumbs;
+export const selectSidebar = (state: RootState) => state.ui.sidebar;
+export const selectModal = (state: RootState) => state.ui.modal;
+export const selectNotifications = (state: RootState) => state.ui.notifications;
+export const selectTableView = (state: RootState) => state.ui.tableView;
+export const selectVisualizationSettings = (state: RootState) => state.ui.visualizationSettings;
+export const selectPanels = (state: RootState) => state.ui.panels;
+export const selectLayout = (state: RootState) => state.ui.layout;

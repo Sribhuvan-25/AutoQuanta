@@ -10,7 +10,6 @@ import {
   Check,
   X,
   Info,
-  BarChart3,
   Zap,
   Target,
   Calendar,
@@ -44,7 +43,7 @@ interface Model {
   training_time?: number;
   dataset_size?: number;
   hyperparameters?: {
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
@@ -112,7 +111,7 @@ export function ModelComparison({
 
     const metricKeys = Object.keys(models[0].metrics);
     return metricKeys.map(key => {
-      const dataPoint: any = { metric: key.replace(/_/g, ' ') };
+      const dataPoint: Record<string, unknown> = { metric: key.replace(/_/g, ' ') };
       models.forEach((model, idx) => {
         dataPoint[`model${idx}`] = model.metrics?.[key] || 0;
       });

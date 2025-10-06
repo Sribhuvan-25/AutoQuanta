@@ -26,7 +26,7 @@ interface PredictionInputProps {
 
 export interface PredictionInputData {
   type: 'single' | 'batch';
-  singleData?: Record<string, any>;
+  singleData?: Record<string, unknown>;
   batchFile?: File;
   batchData?: string[][];
 }
@@ -111,7 +111,7 @@ export function PredictionInput({
       if (!validateSingleInput()) return;
 
       // Convert values to appropriate types
-      const data: Record<string, any> = {};
+      const data: Record<string, unknown> = {};
       features.forEach(feature => {
         const value = singleValues[feature];
         const type = getInputType(feature);

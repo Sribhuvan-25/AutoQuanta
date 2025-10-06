@@ -18,11 +18,6 @@ export function DataQualityReport({ qualityReport, statisticalSummary, className
     return 'text-red-600 bg-red-50 border-red-200';
   };
 
-  const getScoreIcon = (score: number) => {
-    if (score >= 0.9) return CheckCircle;
-    if (score >= 0.7) return AlertCircle;
-    return AlertTriangle;
-  };
 
   const getSeverityColor = (severity: DataQualityIssue['severity']) => {
     switch (severity) {
