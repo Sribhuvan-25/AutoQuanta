@@ -161,12 +161,12 @@ export default function PredictPage() {
       <AppLayout>
         <div className="space-y-8">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Prediction Results</h1>
-            <p className="text-gray-600 mt-1">
+            <h1 className="text-4xl font-bold tracking-tight text-gray-900">Prediction Results</h1>
+            <p className="text-lg text-gray-600 mt-3 max-w-3xl">
               Results from your prediction using {selectedModel?.model_name}
             </p>
           </div>
-          
+
           <PredictionResults
             results={predictionResults}
             singleResult={singlePredictionResult}
@@ -176,34 +176,36 @@ export default function PredictPage() {
       </AppLayout>
     );
   }
-  
+
   return (
     <AppLayout>
       <div className="space-y-8">
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Make Predictions</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-4xl font-bold tracking-tight text-gray-900">Make Predictions</h1>
+          <p className="text-lg text-gray-600 mt-3 max-w-3xl">
             Use your trained models to make predictions on new data.
           </p>
         </div>
 
         {/* Error Display */}
         {(modelsError || predictionError) && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
+          <div className="bg-white/60 backdrop-blur-2xl border border-red-200 rounded-2xl shadow-sm p-6">
+            <div className="flex items-start justify-between gap-6">
+              <div className="flex items-start gap-4 flex-1">
+                <div className="p-3 bg-red-50 rounded-xl border border-red-200">
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                </div>
                 <div>
-                  <h3 className="text-sm font-medium text-red-800">Error</h3>
-                  <p className="text-sm text-red-700 mt-1">{modelsError || predictionError}</p>
+                  <h3 className="text-base font-semibold text-gray-900">Error</h3>
+                  <p className="text-sm text-gray-600 mt-2">{modelsError || predictionError}</p>
                 </div>
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={modelsError ? handleRetryLoadModels : () => dispatch(clearError())}
-                className="text-red-600 border-red-300"
+                className="flex-shrink-0"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Retry
@@ -222,25 +224,29 @@ export default function PredictPage() {
         )}
 
         {/* Model Selection */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Database className="h-5 w-5 text-gray-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Selected Model</h2>
+        <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-gray-100 rounded-xl border border-gray-200">
+              <Database className="h-5 w-5 text-gray-900" />
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900">Selected Model</h2>
           </div>
-          
+
           {isLoadingModels ? (
-            <div className="flex items-center justify-center py-4">
-              <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
-              <span className="text-gray-600">Loading available models...</span>
+            <div className="flex items-center justify-center py-8">
+              <RefreshCw className="h-6 w-6 animate-spin text-gray-700 mr-3" />
+              <span className="text-gray-600 font-medium">Loading available models...</span>
             </div>
           ) : availableModels.length === 0 ? (
-            <div className="text-center py-8">
-              <Database className="h-16 w-16 mx-auto text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Models Available</h3>
-              <p className="text-gray-600 mb-4">
+            <div className="text-center py-12">
+              <div className="p-4 bg-gray-100 rounded-2xl border border-gray-200 w-fit mx-auto mb-6">
+                <Database className="h-16 w-16 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-3">No Models Available</h3>
+              <p className="text-gray-600 mb-6 max-w-md mx-auto">
                 You need to train models first before making predictions.
               </p>
-              <Button onClick={() => window.location.href = '/train'}>
+              <Button onClick={() => window.location.href = '/train'} size="lg">
                 Go to Training
               </Button>
             </div>
@@ -248,41 +254,43 @@ export default function PredictPage() {
             <>
               {/* Current Selected Model Display */}
               {selectedModel ? (
-                <div className="p-4 rounded-lg border border-green-200 bg-green-50 mb-4">
+                <div className="p-5 rounded-2xl border border-gray-300 bg-gradient-to-br from-gray-100 to-gray-50 mb-6 shadow-sm">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Check className="h-5 w-5 text-green-600" />
-                        <h3 className="font-medium text-gray-900">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="p-1.5 bg-white rounded-lg border border-gray-300">
+                          <Check className="h-5 w-5 text-gray-900" />
+                        </div>
+                        <h3 className="font-semibold text-gray-900 text-lg">
                           {selectedModel.model_name.toUpperCase()}
                         </h3>
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-gray-300 text-gray-900 text-xs font-medium rounded-xl shadow-sm">
                           <Zap className="h-3 w-3" />
                           Best Model
                         </span>
                       </div>
-                      <div className="flex gap-4 text-sm text-gray-600">
-                        <span>Type: <span className="font-medium">{selectedModel.model_type.toUpperCase()}</span></span>
-                        <span>Task: <span className="font-medium">{selectedModel.task_type}</span></span>
-                        <span>Score: <span className="font-medium text-green-600">{selectedModel.best_score.toFixed(4)}</span></span>
-                        <span>Features: <span className="font-medium">{selectedModel.feature_count}</span></span>
+                      <div className="flex gap-6 text-sm text-gray-600">
+                        <span>Type: <span className="font-semibold text-gray-900">{selectedModel.model_type.toUpperCase()}</span></span>
+                        <span>Task: <span className="font-semibold text-gray-900">{selectedModel.task_type}</span></span>
+                        <span>Score: <span className="font-semibold text-gray-900">{selectedModel.best_score.toFixed(4)}</span></span>
+                        <span>Features: <span className="font-semibold text-gray-900">{selectedModel.feature_count}</span></span>
                       </div>
                     </div>
                     <div className="flex gap-2">
                       {selectedModel.has_onnx && (
-                        <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">ONNX</span>
+                        <span className="px-3 py-1.5 bg-white border border-gray-300 text-gray-900 text-xs font-medium rounded-xl shadow-sm">ONNX</span>
                       )}
                       {selectedModel.has_pickle && (
-                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">PKL</span>
+                        <span className="px-3 py-1.5 bg-white border border-gray-300 text-gray-900 text-xs font-medium rounded-xl shadow-sm">PKL</span>
                       )}
                     </div>
                   </div>
                 </div>
               ) : null}
-              
+
               {/* Model Selection Button */}
               <div className="flex justify-between items-center">
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 font-medium">
                   {availableModels.length} model{availableModels.length !== 1 ? 's' : ''} available
                 </p>
                 <Button
@@ -301,14 +309,16 @@ export default function PredictPage() {
 
         {/* Input Data */}
         {selectedModel && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <FileText className="h-5 w-5 text-gray-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Input Data</h2>
+          <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-gray-100 rounded-xl border border-gray-200">
+                <FileText className="h-5 w-5 text-gray-900" />
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900">Input Data</h2>
             </div>
-            
+
             {/* Input Mode Selection */}
-            <div className="flex gap-2 mb-6">
+            <div className="flex gap-3 mb-6">
               <Button
                 variant={inputMode === 'csv' ? 'default' : 'outline'}
                 onClick={() => {
@@ -332,11 +342,11 @@ export default function PredictPage() {
                 Manual Input
               </Button>
             </div>
-            
+
             {/* CSV Upload */}
             {inputMode === 'csv' && (
               <div>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                <div className="border-2 border-dashed border-gray-300 rounded-2xl p-12 text-center hover:border-gray-400 transition-colors">
                   <input
                     type="file"
                     accept=".csv"
@@ -345,9 +355,11 @@ export default function PredictPage() {
                     id="csv-upload"
                   />
                   <label htmlFor="csv-upload" className="cursor-pointer">
-                    <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">Upload CSV File</h3>
-                    <p className="text-gray-600 mb-4">
+                    <div className="p-4 bg-gray-100 rounded-2xl border border-gray-200 w-fit mx-auto mb-6">
+                      <Upload className="h-12 w-12 text-gray-900" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-3">Upload CSV File</h3>
+                    <p className="text-gray-600 mb-4 max-w-md mx-auto">
                       Choose a CSV file with {selectedModel.feature_count} numeric columns
                       {selectedModel.feature_names && selectedModel.feature_names.length > 0 && (
                         <>
@@ -356,17 +368,19 @@ export default function PredictPage() {
                         </>
                       )}
                     </p>
-                    <Button>Choose File</Button>
+                    <Button size="lg">Choose File</Button>
                   </label>
                 </div>
-                
+
                 {csvFile && (
-                  <div className="mt-4 space-y-4">
-                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-5 w-5 text-green-600" />
-                        <span className="font-medium text-green-800">{csvFile.name}</span>
-                        <span className="text-green-600">({(csvFile.size / 1024).toFixed(1)} KB)</span>
+                  <div className="mt-6 space-y-4">
+                    <div className="p-4 bg-gray-100 rounded-xl border border-gray-200">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-white rounded-lg border border-gray-200">
+                          <FileText className="h-5 w-5 text-gray-900" />
+                        </div>
+                        <span className="font-semibold text-gray-900">{csvFile.name}</span>
+                        <span className="text-gray-600">({(csvFile.size / 1024).toFixed(1)} KB)</span>
                       </div>
                     </div>
                     

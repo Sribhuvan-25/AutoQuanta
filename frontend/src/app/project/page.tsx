@@ -208,21 +208,21 @@ export default function ProjectPage() {
       title: 'Data Explorer',
       description: 'Analyze and explore your data',
       href: '/eda',
-      color: 'text-blue-600 bg-blue-50'
+      color: 'text-gray-900 bg-gray-100'
     },
     {
       icon: Brain,
       title: 'Train Models',
       description: 'Train machine learning models',
       href: '/train',
-      color: 'text-purple-600 bg-purple-50'
+      color: 'text-gray-900 bg-gray-100'
     },
     {
       icon: Zap,
       title: 'Make Predictions',
       description: 'Use trained models for predictions',
       href: '/predict',
-      color: 'text-green-600 bg-green-50'
+      color: 'text-gray-900 bg-gray-100'
     }
   ];
 
@@ -232,8 +232,8 @@ export default function ProjectPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Projects</h1>
-            <p className="text-gray-600 mt-1">Manage your data science projects and files</p>
+            <h1 className="text-4xl font-bold tracking-tight text-gray-900">Projects</h1>
+            <p className="text-lg text-gray-600 mt-3 max-w-3xl">Manage your data science projects and files</p>
           </div>
           <Button onClick={() => setShowNewProjectModal(true)}>
             <Plus className="h-4 w-4 mr-2" />
@@ -242,25 +242,34 @@ export default function ProjectPage() {
         </div>
 
         {/* File Upload Section */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
-          <div className="flex items-center gap-x-3 mb-4">
-            <Upload className="h-6 w-6 text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Upload Data</h2>
+        <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="p-2 bg-gray-100 rounded-xl border border-gray-200">
+              <Upload className="h-6 w-6 text-gray-900" />
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900">Upload Data</h2>
           </div>
-          <p className="text-sm text-gray-600 mb-4">
+          <p className="text-sm text-gray-600 mb-6">
             Upload a CSV file to start analyzing your data and training models.
           </p>
-          
+
           {/* Error Display */}
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-sm text-red-600">{error}</p>
-              <button 
-                onClick={() => setError(null)}
-                className="text-xs text-red-500 hover:text-red-700 mt-1"
-              >
-                Dismiss
-              </button>
+            <div className="mb-6 p-4 bg-white/60 backdrop-blur-2xl border border-red-200 rounded-xl shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-red-50 rounded-lg border border-red-200">
+                  <X className="h-4 w-4 text-red-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-900">{error}</p>
+                  <button
+                    onClick={() => setError(null)}
+                    className="text-xs text-gray-600 hover:text-gray-900 mt-2 font-medium"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
             </div>
           )}
           
@@ -282,21 +291,23 @@ export default function ProjectPage() {
 
           {/* Data Processing Status */}
           {currentDataset && (
-            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
-              <div className="flex items-center gap-x-2">
-                <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-                <p className="text-sm text-green-700 font-medium">
+            <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-xl shadow-sm">
+              <div className="flex items-center gap-x-3 mb-2">
+                <div className="p-1.5 bg-white rounded-lg border border-gray-300 shadow-sm">
+                  <div className="h-2 w-2 bg-gray-900 rounded-full"></div>
+                </div>
+                <p className="text-sm text-gray-900 font-medium">
                   Data processed successfully: {currentDataset.fileName}
                 </p>
               </div>
-              <p className="text-xs text-green-600 mt-1">
+              <p className="text-xs text-gray-600 ml-10">
                 {currentDataset.metadata.rowCount.toLocaleString()} rows × {currentDataset.metadata.columnCount} columns
               </p>
-              <div className="mt-2">
-                <Button 
-                  size="sm" 
+              <div className="mt-3 ml-10">
+                <Button
+                  size="sm"
                   onClick={() => router.push('/eda')}
-                  className="bg-green-600 hover:bg-green-700"
+                  className="bg-gray-900 hover:bg-gray-800 text-white"
                 >
                   View Data →
                 </Button>
@@ -306,28 +317,28 @@ export default function ProjectPage() {
         </div>
 
         {/* Quick Actions */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+        <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {quickActions.map((action) => (
               <Link
                 key={action.title}
                 href={action.href}
-                className="group p-4 rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all"
+                className="group p-4 rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-xl hover:-translate-y-1 hover:scale-[1.02] transition-all duration-300 ease-out bg-white/40"
               >
                 <div className="flex items-center gap-x-3">
-                  <div className={`p-2 rounded-lg ${action.color}`}>
+                  <div className={`p-2 rounded-xl ${action.color} border border-gray-200 shadow-sm`}>
                     <action.icon className="h-5 w-5" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
+                    <h3 className="font-medium text-gray-900 transition-colors">
                       {action.title}
                     </h3>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <p className="text-sm text-gray-600 mt-0.5">
                       {action.description}
                     </p>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                  <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-gray-900 transition-colors" />
                 </div>
               </Link>
             ))}
@@ -335,33 +346,37 @@ export default function ProjectPage() {
         </div>
 
         {/* Recent Projects */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-lg border border-slate-200/50 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Recent Projects</h2>
-            <Link href="/project" className="text-sm text-blue-600 hover:text-blue-700">
+        <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-gray-900">Recent Projects</h2>
+            <Link href="/project" className="text-sm text-gray-700 hover:text-gray-900 font-medium">
               View all
             </Link>
           </div>
-          
+
           <div className="space-y-3">
             {isLoading ? (
-              <div className="flex items-center justify-center p-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
+              <div className="flex items-center justify-center p-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mr-3"></div>
                 <span className="text-gray-600">Loading projects...</span>
               </div>
             ) : projects.length === 0 ? (
-              <div className="text-center p-8 text-gray-500">
-                <FolderOpen className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-                <p>No projects yet. Create your first project to get started.</p>
+              <div className="text-center p-12 text-gray-500">
+                <div className="p-4 bg-gray-100 rounded-2xl border border-gray-200 inline-flex mb-4">
+                  <FolderOpen className="h-12 w-12 text-gray-400" />
+                </div>
+                <p className="text-sm">No projects yet. Create your first project to get started.</p>
               </div>
             ) : (
               projects.map((project) => (
               <div
                 key={project.id}
-                className="flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors"
+                className="flex items-center justify-between p-4 rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all bg-white/40"
               >
                 <div className="flex items-center gap-x-3">
-                  <FolderOpen className="h-5 w-5 text-gray-400" />
+                  <div className="p-2 bg-gray-100 rounded-lg border border-gray-200">
+                    <FolderOpen className="h-5 w-5 text-gray-900" />
+                  </div>
                   <div>
                     <h3 className="font-medium text-gray-900">{project.name}</h3>
                     <p className="text-sm text-gray-600">{project.description}</p>
@@ -369,10 +384,10 @@ export default function ProjectPage() {
                 </div>
                 <div className="flex items-center gap-x-4">
                   <div className="text-right">
-                    <p className="text-sm text-gray-600">{project.fileCount} files</p>
+                    <p className="text-sm text-gray-700 font-medium">{project.fileCount} files</p>
                     <p className="text-xs text-gray-500">Modified {project.lastModified}</p>
                   </div>
-                  <Button variant="ghost" size="sm">
+                  <Button variant="ghost" size="sm" className="hover:bg-gray-100">
                     Open
                   </Button>
                 </div>
@@ -383,26 +398,26 @@ export default function ProjectPage() {
         </div>
 
         {/* Getting Started Guide */}
-        <div className="bg-blue-50/80 backdrop-blur-sm rounded-lg border border-blue-200/50 shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-blue-900 mb-3">Getting Started</h2>
-          <div className="space-y-3 text-sm text-blue-800">
-            <p>1. <strong>Upload your data:</strong> Start by uploading a CSV file using the upload area above.</p>
-            <p>2. <strong>Explore your data:</strong> Use the Data Explorer to understand your data structure and patterns.</p>
-            <p>3. <strong>Train models:</strong> Automatically train and compare multiple machine learning models.</p>
-            <p>4. <strong>Make predictions:</strong> Use your trained models to make predictions on new data.</p>
+        <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Getting Started</h2>
+          <div className="space-y-3 text-sm text-gray-700">
+            <p>1. <strong className="text-gray-900">Upload your data:</strong> Start by uploading a CSV file using the upload area above.</p>
+            <p>2. <strong className="text-gray-900">Explore your data:</strong> Use the Data Explorer to understand your data structure and patterns.</p>
+            <p>3. <strong className="text-gray-900">Train models:</strong> Automatically train and compare multiple machine learning models.</p>
+            <p>4. <strong className="text-gray-900">Make predictions:</strong> Use your trained models to make predictions on new data.</p>
           </div>
         </div>
         
         {/* New Project Modal */}
         {showNewProjectModal && (
-          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white/95 backdrop-blur-xl rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-xl border border-white/40">
               {/* Header */}
-              <div className="flex items-center justify-between p-6 border-b">
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900">Create New Project</h2>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => {
                     setShowNewProjectModal(false);
                     setProjectName('');
@@ -410,6 +425,7 @@ export default function ProjectPage() {
                     setSelectedProjectDirectory(null);
                     setError(null);
                   }}
+                  className="hover:bg-gray-100"
                 >
                   <X className="h-5 w-5" />
                 </Button>
@@ -419,7 +435,7 @@ export default function ProjectPage() {
               <div className="p-6 space-y-4">
                 {/* Error Display */}
                 {error && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl shadow-sm">
                     <p className="text-sm text-red-600">{error}</p>
                   </div>
                 )}
@@ -433,7 +449,7 @@ export default function ProjectPage() {
                     type="text"
                     value={projectName}
                     onChange={(e) => setProjectName(e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white"
                     placeholder="Enter project name"
                     disabled={isCreatingProject}
                   />
@@ -448,7 +464,7 @@ export default function ProjectPage() {
                     value={projectDescription}
                     onChange={(e) => setProjectDescription(e.target.value)}
                     rows={3}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-white"
                     placeholder="Enter project description"
                     disabled={isCreatingProject}
                   />
@@ -464,15 +480,15 @@ export default function ProjectPage() {
                       variant="outline"
                       onClick={handleSelectProjectDirectory}
                       disabled={isCreatingProject}
-                      className="w-full flex items-center justify-center gap-2"
+                      className="w-full flex items-center justify-center gap-2 rounded-xl hover:bg-gray-100"
                     >
                       <FolderOpen className="h-4 w-4" />
                       {selectedProjectDirectory ? 'Change Directory' : 'Select Directory'}
                     </Button>
                     {selectedProjectDirectory && (
-                      <div className="p-3 bg-gray-50 rounded-lg">
+                      <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
                         <p className="text-sm text-gray-600 break-all">
-                          <strong>Selected:</strong> {selectedProjectDirectory}
+                          <strong className="text-gray-900">Selected:</strong> {selectedProjectDirectory}
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
                           All project data, models, and results will be saved here
@@ -484,7 +500,7 @@ export default function ProjectPage() {
               </div>
 
               {/* Footer */}
-              <div className="flex justify-end gap-3 p-6 border-t bg-gray-50">
+              <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-white/60 backdrop-blur-sm rounded-b-2xl">
                 <Button
                   variant="outline"
                   onClick={() => {
@@ -495,12 +511,14 @@ export default function ProjectPage() {
                     setError(null);
                   }}
                   disabled={isCreatingProject}
+                  className="rounded-xl hover:bg-gray-100"
                 >
                   Cancel
                 </Button>
                 <Button
                   onClick={handleCreateProject}
                   disabled={!projectName.trim() || !selectedProjectDirectory || isCreatingProject}
+                  className="bg-gray-900 hover:bg-gray-800 text-white rounded-xl"
                 >
                   {isCreatingProject ? 'Creating...' : 'Create Project'}
                 </Button>
