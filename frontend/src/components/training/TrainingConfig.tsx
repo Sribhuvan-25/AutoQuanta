@@ -127,38 +127,48 @@ export function TrainingConfig({ onStartTraining, isTraining, className }: Train
 
   if (!currentDataset || !currentDataset.data || currentDataset.data.length === 0) {
     return (
-      <div className={cn('p-6 bg-yellow-50 rounded-lg border border-yellow-200', className)}>
-        <div className="flex items-center gap-2 text-yellow-800">
-          <AlertTriangle className="h-5 w-5" />
-          <p className="font-medium">No data loaded</p>
+      <div className={cn('p-6 bg-white/60 backdrop-blur-2xl border border-orange-200 rounded-2xl shadow-sm', className)}>
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-orange-50 rounded-xl border border-orange-200">
+            <AlertTriangle className="h-5 w-5 text-orange-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-gray-900">No data loaded</p>
+            <p className="text-gray-600 mt-1 text-sm">
+              Please load and process your data before configuring training.
+            </p>
+          </div>
         </div>
-        <p className="text-yellow-700 mt-1 text-sm">
-          Please load and process your data before configuring training.
-        </p>
       </div>
     );
   }
 
   if (availableTargets.length === 0) {
     return (
-      <div className={cn('p-6 bg-yellow-50 rounded-lg border border-yellow-200', className)}>
-        <div className="flex items-center gap-2 text-yellow-800">
-          <AlertTriangle className="h-5 w-5" />
-          <p className="font-medium">No suitable target columns</p>
+      <div className={cn('p-6 bg-white/60 backdrop-blur-2xl border border-orange-200 rounded-2xl shadow-sm', className)}>
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-orange-50 rounded-xl border border-orange-200">
+            <AlertTriangle className="h-5 w-5 text-orange-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-gray-900">No suitable target columns</p>
+            <p className="text-gray-600 mt-1 text-sm">
+              No numeric or categorical columns found that can be used as training targets.
+            </p>
+          </div>
         </div>
-        <p className="text-yellow-700 mt-1 text-sm">
-          No numeric or categorical columns found that can be used as training targets.
-        </p>
       </div>
     );
   }
 
   return (
-    <div className={cn('bg-white rounded-lg border border-gray-200 p-6 space-y-6', className)}>
+    <div className={cn('bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6 space-y-6', className)}>
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Settings className="h-5 w-5 text-blue-600" />
-        <h3 className="text-lg font-semibold text-gray-900">Training Configuration</h3>
+        <div className="p-2 bg-gray-100 rounded-xl border border-gray-200">
+          <Settings className="h-5 w-5 text-gray-900" />
+        </div>
+        <h3 className="text-xl font-semibold text-gray-900">Training Configuration</h3>
       </div>
 
       {/* Target Column Selection */}
@@ -171,7 +181,7 @@ export function TrainingConfig({ onStartTraining, isTraining, className }: Train
           value={config.target_column}
           onChange={(e) => setConfig(prev => ({ ...prev, target_column: e.target.value }))}
           className={cn(
-            'w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+            'w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-gray-400 bg-white',
             errors.target_column ? 'border-red-300' : 'border-gray-300'
           )}
         >
@@ -185,13 +195,13 @@ export function TrainingConfig({ onStartTraining, isTraining, className }: Train
         {errors.target_column && (
           <p className="text-sm text-red-600">{errors.target_column}</p>
         )}
-        
+
         {config.target_column && (
-          <div className="bg-blue-50 p-3 rounded-lg">
-            <p className="text-sm text-blue-800">
+          <div className="bg-gray-100 p-4 rounded-xl border border-gray-200">
+            <p className="text-sm text-gray-900">
               <strong>Task Type:</strong> {config.task_type === 'classification' ? 'Classification' : 'Regression'}
             </p>
-            <p className="text-xs text-blue-600 mt-1">
+            <p className="text-xs text-gray-600 mt-1">
               Auto-detected based on target column characteristics
             </p>
           </div>
@@ -212,10 +222,10 @@ export function TrainingConfig({ onStartTraining, isTraining, className }: Train
             <div
               key={model.id}
               className={cn(
-                'p-3 border rounded-lg cursor-pointer transition-colors',
+                'p-4 border rounded-xl cursor-pointer transition-all duration-200',
                 config.models_to_try.includes(model.id)
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-gray-900 bg-gray-100 shadow-sm'
+                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
               )}
               onClick={() => handleModelToggle(model.id)}
             >
@@ -226,11 +236,11 @@ export function TrainingConfig({ onStartTraining, isTraining, className }: Train
                       type="checkbox"
                       checked={config.models_to_try.includes(model.id)}
                       onChange={() => handleModelToggle(model.id)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="rounded border-gray-300 text-gray-900 focus:ring-gray-500"
                     />
                     <span className="font-medium text-gray-900">{model.name}</span>
                   </div>
-                  <p className="text-xs text-gray-600 mt-1">{model.description}</p>
+                  <p className="text-xs text-gray-600 mt-2 leading-relaxed">{model.description}</p>
                 </div>
               </div>
             </div>
@@ -284,7 +294,7 @@ export function TrainingConfig({ onStartTraining, isTraining, className }: Train
                 value={config.cv_folds}
                 onChange={(e) => setConfig(prev => ({ ...prev, cv_folds: parseInt(e.target.value) || 5 }))}
                 className={cn(
-                  'w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+                  'w-full px-3 py-2 border rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-gray-400 bg-white',
                   errors.cv_folds ? 'border-red-300' : 'border-gray-300'
                 )}
               />
@@ -292,7 +302,7 @@ export function TrainingConfig({ onStartTraining, isTraining, className }: Train
                 <p className="text-sm text-red-600 mt-1">{errors.cv_folds}</p>
               )}
             </div>
-            
+
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1">
                 Random Seed
@@ -301,7 +311,7 @@ export function TrainingConfig({ onStartTraining, isTraining, className }: Train
                 type="number"
                 value={config.random_seed}
                 onChange={(e) => setConfig(prev => ({ ...prev, random_seed: parseInt(e.target.value) || 42 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-gray-400 bg-white"
               />
             </div>
           </div>

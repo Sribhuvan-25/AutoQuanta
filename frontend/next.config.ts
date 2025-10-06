@@ -69,9 +69,6 @@ const nextConfig: NextConfig = {
 
   // Strict mode
   reactStrictMode: true,
-
-  // SWC minification (faster than Terser)
-  swcMinify: true,
 };
 
 export default nextConfig;

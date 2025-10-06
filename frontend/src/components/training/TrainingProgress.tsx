@@ -23,11 +23,11 @@ interface TrainingProgressProps {
 }
 
 const TRAINING_STAGES = {
-  starting: { label: 'Initializing', color: 'text-blue-600', icon: Play },
-  preparing: { label: 'Preparing Data', color: 'text-blue-600', icon: Activity },
-  training: { label: 'Training Models', color: 'text-green-600', icon: Brain },
-  evaluating: { label: 'Evaluating Performance', color: 'text-purple-600', icon: CheckCircle },
-  completed: { label: 'Training Complete', color: 'text-green-600', icon: CheckCircle },
+  starting: { label: 'Initializing', color: 'text-gray-700', icon: Play },
+  preparing: { label: 'Preparing Data', color: 'text-gray-700', icon: Activity },
+  training: { label: 'Training Models', color: 'text-gray-900', icon: Brain },
+  evaluating: { label: 'Evaluating Performance', color: 'text-gray-900', icon: CheckCircle },
+  completed: { label: 'Training Complete', color: 'text-gray-900', icon: CheckCircle },
   failed: { label: 'Training Failed', color: 'text-red-600', icon: AlertTriangle },
   stopped: { label: 'Training Stopped', color: 'text-gray-600', icon: Square }
 };
@@ -59,20 +59,20 @@ export function TrainingProgress({
   }
 
   return (
-    <div className={cn('bg-white rounded-lg border border-gray-200 p-6', className)}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className={cn('p-2 rounded-full bg-gray-100', isTraining && 'animate-pulse')}>
+    <div className={cn('bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6', className)}>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <div className={cn('p-3 rounded-xl bg-gray-100 border border-gray-200', isTraining && 'animate-pulse')}>
             <StageIcon className={cn('h-5 w-5', stageInfo.color)} />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Training Progress</h3>
-            <p className={cn('text-sm', stageInfo.color)}>
+            <h3 className="text-xl font-semibold text-gray-900">Training Progress</h3>
+            <p className={cn('text-sm mt-1', stageInfo.color)}>
               {stageInfo.label}
             </p>
           </div>
         </div>
-        
+
         {isTraining && stage !== 'completed' && (
           <Button
             variant="outline"
@@ -87,18 +87,18 @@ export function TrainingProgress({
       </div>
 
       {/* Progress Bar */}
-      <div className="space-y-2">
+      <div className="space-y-3">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-600">Progress</span>
-          <span className="font-medium">{Math.round(progress)}%</span>
+          <span className="text-gray-600 font-medium">Progress</span>
+          <span className="font-semibold text-gray-900">{Math.round(progress)}%</span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-3">
           <div
             className={cn(
               'h-3 rounded-full transition-all duration-300',
-              stage === 'failed' ? 'bg-red-500' : 
-              stage === 'completed' ? 'bg-green-500' :
-              'bg-blue-500'
+              stage === 'failed' ? 'bg-red-500' :
+              stage === 'completed' ? 'bg-gray-900' :
+              'bg-gray-700'
             )}
             style={{ width: `${progress}%` }}
           />
@@ -129,39 +129,39 @@ export function TrainingProgress({
         <div className="space-y-2">
           {Object.entries(TRAINING_STAGES).slice(0, -3).map(([key, info], index) => {
             const isActive = stage === key;
-            const isComplete = 
+            const isComplete =
               stage === 'completed' ||
-              (Object.keys(TRAINING_STAGES).indexOf(stage) > Object.keys(TRAINING_STAGES).indexOf(key) && 
+              (Object.keys(TRAINING_STAGES).indexOf(stage) > Object.keys(TRAINING_STAGES).indexOf(key) &&
                stage !== 'failed' && stage !== 'stopped');
-            
+
             return (
               <div
                 key={key}
                 className={cn(
-                  'flex items-center gap-3 p-2 rounded-lg transition-colors',
-                  isActive ? 'bg-blue-50 border border-blue-200' : 
-                  isComplete ? 'bg-green-50' : 'bg-gray-50'
+                  'flex items-center gap-3 p-3 rounded-xl transition-all duration-200',
+                  isActive ? 'bg-gray-100 border border-gray-300' :
+                  isComplete ? 'bg-gray-50 border border-gray-200' : 'bg-white border border-gray-200'
                 )}
               >
                 <div className={cn(
-                  'w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium',
-                  isComplete ? 'bg-green-500 text-white' :
-                  isActive ? 'bg-blue-500 text-white' :
+                  'w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold',
+                  isComplete ? 'bg-gray-900 text-white' :
+                  isActive ? 'bg-gray-700 text-white' :
                   'bg-gray-300 text-gray-600'
                 )}>
                   {isComplete ? '✓' : index + 1}
                 </div>
                 <span className={cn(
                   'text-sm',
-                  isActive ? 'text-blue-700 font-medium' :
-                  isComplete ? 'text-green-700' :
+                  isActive ? 'text-gray-900 font-medium' :
+                  isComplete ? 'text-gray-700' :
                   'text-gray-600'
                 )}>
                   {info.label}
                 </span>
                 {isActive && isTraining && (
                   <div className="ml-auto">
-                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-gray-700 border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
               </div>
