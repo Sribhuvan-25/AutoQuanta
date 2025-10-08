@@ -356,29 +356,6 @@ export default function ProjectPage() {
               </div>
             )}
 
-            {/* Getting Started Guide - Collapsible */}
-            <div className="mt-6 border-t pt-6">
-              <button
-                onClick={() => setShowGettingStarted(!showGettingStarted)}
-                className="flex items-center justify-between w-full text-left"
-              >
-                <h3 className="text-lg font-semibold text-gray-900">Getting Started</h3>
-                {showGettingStarted ? (
-                  <ChevronUp className="h-5 w-5 text-gray-600" />
-                ) : (
-                  <ChevronDown className="h-5 w-5 text-gray-600" />
-                )}
-              </button>
-
-              {showGettingStarted && (
-                <div className="mt-4 space-y-3 text-sm text-gray-700">
-                  <p>1. <strong className="text-gray-900">Upload your data:</strong> Start by uploading a CSV file using the upload area above.</p>
-                  <p>2. <strong className="text-gray-900">Explore your data:</strong> Use the Data Explorer to understand your data structure and patterns.</p>
-                  <p>3. <strong className="text-gray-900">Train models:</strong> Automatically train and compare multiple machine learning models.</p>
-                  <p>4. <strong className="text-gray-900">Make predictions:</strong> Use your trained models to make predictions on new data.</p>
-                </div>
-              )}
-            </div>
           </div>
 
           {/* RIGHT HALF */}
@@ -476,6 +453,65 @@ export default function ProjectPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Getting Started Guide - Full Width Collapsible */}
+        <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+          <button
+            onClick={() => setShowGettingStarted(!showGettingStarted)}
+            className="flex items-center justify-between w-full text-left"
+          >
+            <h3 className="text-lg font-semibold text-gray-900">Getting Started</h3>
+            {showGettingStarted ? (
+              <ChevronUp className="h-5 w-5 text-gray-600" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-gray-600" />
+            )}
+          </button>
+
+          {showGettingStarted && (
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-semibold">
+                    1
+                  </div>
+                  <h4 className="font-semibold text-gray-900">Upload your data</h4>
+                </div>
+                <p className="text-sm text-gray-600">Start by uploading a CSV file using the upload area above.</p>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-semibold">
+                    2
+                  </div>
+                  <h4 className="font-semibold text-gray-900">Explore your data</h4>
+                </div>
+                <p className="text-sm text-gray-600">Use the Data Explorer to understand your data structure and patterns.</p>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-semibold">
+                    3
+                  </div>
+                  <h4 className="font-semibold text-gray-900">Train models</h4>
+                </div>
+                <p className="text-sm text-gray-600">Automatically train and compare multiple machine learning models.</p>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-semibold">
+                    4
+                  </div>
+                  <h4 className="font-semibold text-gray-900">Make predictions</h4>
+                </div>
+                <p className="text-sm text-gray-600">Use your trained models to make predictions on new data.</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* All Projects Modal */}

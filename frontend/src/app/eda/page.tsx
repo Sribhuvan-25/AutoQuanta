@@ -9,13 +9,13 @@ import { CorrelationHeatmap } from '@/components/data/CorrelationHeatmap';
 import { DataQualityReport } from '@/components/data/DataQualityReport';
 import { Button } from '@/components/ui/button';
 import { DataProcessingIndicator } from '@/components/ui/loading';
-import { AlertTriangle, Info, Download, Upload } from 'lucide-react';
+import { AlertTriangle, Info, Download, Upload, Eye, Database, CheckCircle2, BarChart3 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
-import { 
-  selectCurrentDataset, 
-  selectIsProcessing, 
-  selectProcessingStage, 
+import {
+  selectCurrentDataset,
+  selectIsProcessing,
+  selectProcessingStage,
   selectProcessingProgress,
   selectDataError,
   selectDataWarnings,
@@ -28,13 +28,16 @@ import {
   selectQualityReport,
   selectAdvancedColumns
 } from '@/store/slices/dataSlice';
+import { cn } from '@/lib/utils';
 
+type TabType = 'overview' | 'columns' | 'quality' | 'visualizations';
 
 export default function EDAPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
+
   const currentDataset = useAppSelector(selectCurrentDataset);
   const isProcessing = useAppSelector(selectIsProcessing);
   const processingStage = useAppSelector(selectProcessingStage);
@@ -62,17 +65,17 @@ export default function EDAPage() {
       try {
         const fileInfo = JSON.parse(uploadedFileData);
         console.log('Auto-processing uploaded file from sessionStorage:', fileInfo);
-        
+
         // Auto-start processing the uploaded file through Redux
-        dispatch(processCSVFile({ 
-          filePath: fileInfo.path, 
+        dispatch(processCSVFile({
+          filePath: fileInfo.path,
           fileInfo: {
             name: fileInfo.name,
             size: fileInfo.size,
             type: fileInfo.type
           }
         }));
-        
+
         // Clear from session storage after initiating processing
         sessionStorage.removeItem('uploadedFile');
       } catch (error) {
@@ -89,6 +92,7 @@ export default function EDAPage() {
   const handleReset = useCallback(() => {
     dispatch(clearCurrentDataset());
     setValidationErrors([]);
+    setActiveTab('overview');
   }, [dispatch]);
 
   const handleExportReport = useCallback(() => {
@@ -125,9 +129,37 @@ export default function EDAPage() {
     linkElement.click();
   }, [currentDataset, advancedColumns, statisticalSummary, qualityReport, dataWarnings]);
 
+  const tabs = [
+    {
+      id: 'overview' as TabType,
+      name: 'Overview',
+      icon: Eye,
+      badge: currentDataset ? `${currentDataset.metadata.rowCount.toLocaleString()} rows` : undefined
+    },
+    {
+      id: 'columns' as TabType,
+      name: 'Column Analysis',
+      icon: Database,
+      badge: currentDataset ? `${currentDataset.metadata.columnCount} columns` : undefined
+    },
+    {
+      id: 'quality' as TabType,
+      name: 'Data Quality',
+      icon: CheckCircle2,
+      badge: (dataWarnings.length > 0 || currentDataset?.warnings.length > 0)
+        ? `${dataWarnings.length + (currentDataset?.warnings.length || 0)} insights`
+        : undefined
+    },
+    {
+      id: 'visualizations' as TabType,
+      name: 'Visualizations',
+      icon: BarChart3
+    }
+  ];
+
   return (
     <AppLayout>
-      <div className="space-y-8">
+      <div className="space-y-6">
         {/* Header */}
         <div>
           <h1 className="text-4xl font-bold tracking-tight text-gray-900">Data Explorer</h1>
@@ -217,10 +249,10 @@ export default function EDAPage() {
           </div>
         )}
 
-        {/* Data Overview */}
+        {/* Data Overview - Tab Based */}
         {currentDataset && !isProcessing && (
           <div className="space-y-6">
-            {/* File Info */}
+            {/* File Info Header */}
             <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -244,99 +276,153 @@ export default function EDAPage() {
               </div>
             </div>
 
-            {/* Warnings */}
-            {(dataWarnings.length > 0 || currentDataset.warnings.length > 0) && (
-              <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
-                <h3 className="text-xl font-semibold text-gray-900 mb-6">Data Quality Insights</h3>
-                <div className="space-y-4">
-                  {[...dataWarnings, ...currentDataset.warnings].map((warning, index) => (
-                    <div key={index} className="flex items-start gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
-                      <div className="p-2 bg-white rounded-lg border border-gray-200">
-                        {warning.type === 'warning' && <AlertTriangle className="h-5 w-5 text-orange-600" />}
-                        {warning.type === 'info' && <Info className="h-5 w-5 text-gray-700" />}
-                        {warning.type === 'error' && <AlertTriangle className="h-5 w-5 text-red-600" />}
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-900 font-medium">{warning.message}</p>
-                        {warning.column && (
-                          <p className="text-xs text-gray-600 mt-1">Column: {warning.column}</p>
+            {/* Tab Navigation */}
+            <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm">
+              <div className="border-b border-gray-200">
+                <div className="flex space-x-1 p-2">
+                  {tabs.map((tab) => {
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={cn(
+                          'flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-all',
+                          activeTab === tab.id
+                            ? 'bg-gray-900 text-white shadow-sm'
+                            : 'text-gray-700 hover:bg-gray-100'
                         )}
-                        {warning.suggestion && (
-                          <p className="text-xs text-gray-700 mt-2">💡 {warning.suggestion}</p>
+                      >
+                        <Icon className="h-4 w-4" />
+                        {tab.name}
+                        {tab.badge && (
+                          <span className={cn(
+                            'text-xs px-2 py-0.5 rounded-full',
+                            activeTab === tab.id
+                              ? 'bg-white/20 text-white'
+                              : 'bg-gray-200 text-gray-700'
+                          )}>
+                            {tab.badge}
+                          </span>
                         )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Tab Content */}
+              <div className="min-h-[400px] p-6">
+                {/* Overview Tab */}
+                {activeTab === 'overview' && (
+                  <div className="space-y-6">
+                    {/* Warnings */}
+                    {(dataWarnings.length > 0 || currentDataset.warnings.length > 0) && (
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Data Quality Insights</h3>
+                        <div className="space-y-3">
+                          {[...dataWarnings, ...currentDataset.warnings].map((warning, index) => (
+                            <div key={index} className="flex items-start gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                              <div className="p-2 bg-white rounded-lg border border-gray-200">
+                                {warning.type === 'warning' && <AlertTriangle className="h-5 w-5 text-orange-600" />}
+                                {warning.type === 'info' && <Info className="h-5 w-5 text-gray-700" />}
+                                {warning.type === 'error' && <AlertTriangle className="h-5 w-5 text-red-600" />}
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm text-gray-900 font-medium">{warning.message}</p>
+                                {warning.column && (
+                                  <p className="text-xs text-gray-600 mt-1">Column: {warning.column}</p>
+                                )}
+                                {warning.suggestion && (
+                                  <p className="text-xs text-gray-700 mt-2">💡 {warning.suggestion}</p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
+                    )}
+
+                    {/* Data Preview */}
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900">Data Preview</h3>
+                        <div className="text-sm text-gray-600">
+                          Showing first {Math.min(100, currentDataset.rows.length)} rows
+                        </div>
+                      </div>
+                      <DataTable data={currentDataset.data} maxRows={100} />
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Data Preview */}
-            <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-semibold text-gray-900">Data Preview</h3>
-                <div className="text-sm text-gray-600">
-                  Showing first {Math.min(100, currentDataset.rows.length)} rows
-                </div>
-              </div>
-              <DataTable data={currentDataset.data} maxRows={100} />
-            </div>
-
-            {/* Data Quality Report */}
-            {qualityReport && statisticalSummary && (
-              <DataQualityReport 
-                qualityReport={qualityReport}
-                statisticalSummary={statisticalSummary}
-              />
-            )}
-
-            {/* Advanced Column Analysis */}
-            <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
-              <h3 className="text-xl font-semibold text-gray-900 mb-6">Advanced Column Analysis</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {(advancedColumns || currentDataset.columns).map((column) => (
-                  <AdvancedColumnCard
-                    key={column.name}
-                    column={column}
-                    isSelected={targetColumn === column.name}
-                    onSelect={() => handleTargetSelect(column.name)}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Data Visualizations */}
-            <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
-              <h3 className="text-xl font-semibold text-gray-900 mb-6">Data Visualizations</h3>
-
-              {/* Column Distributions */}
-              <div className="mb-8">
-                <h4 className="text-base font-semibold text-gray-900 mb-5">Column Distributions</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {currentDataset.columns.slice(0, 6).map((column) => (
-                    <div key={column.name} className="bg-gray-50 rounded-xl border border-gray-200 p-4">
-                      <ColumnDistribution
-                        column={column}
-                        data={currentDataset.data}
-                      />
-                    </div>
-                  ))}
-                </div>
-                {currentDataset.columns.length > 6 && (
-                  <div className="text-center mt-6">
-                    <Button variant="outline" size="sm">
-                      Show All Distributions ({currentDataset.columns.length - 6} more)
-                    </Button>
                   </div>
                 )}
-              </div>
 
-              {/* Correlation Analysis */}
-              <div>
-                <h4 className="text-base font-semibold text-gray-900 mb-5">Correlation Analysis</h4>
-                <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
-                  <CorrelationHeatmap data={currentDataset.data} />
-                </div>
+                {/* Column Analysis Tab */}
+                {activeTab === 'columns' && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Advanced Column Analysis</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {(advancedColumns || currentDataset.columns).map((column) => (
+                        <AdvancedColumnCard
+                          key={column.name}
+                          column={column}
+                          isSelected={targetColumn === column.name}
+                          onSelect={() => handleTargetSelect(column.name)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Data Quality Tab */}
+                {activeTab === 'quality' && (
+                  <div>
+                    {qualityReport && statisticalSummary ? (
+                      <DataQualityReport
+                        qualityReport={qualityReport}
+                        statisticalSummary={statisticalSummary}
+                      />
+                    ) : (
+                      <div className="text-center p-12 text-gray-500">
+                        <p>Quality report is being generated...</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Visualizations Tab */}
+                {activeTab === 'visualizations' && (
+                  <div className="space-y-8">
+                    {/* Column Distributions */}
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">Column Distributions</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {currentDataset.columns.slice(0, 6).map((column) => (
+                          <div key={column.name} className="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                            <ColumnDistribution
+                              column={column}
+                              data={currentDataset.data}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      {currentDataset.columns.length > 6 && (
+                        <div className="text-center mt-6">
+                          <Button variant="outline" size="sm">
+                            Show All Distributions ({currentDataset.columns.length - 6} more)
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Correlation Analysis */}
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">Correlation Analysis</h4>
+                      <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
+                        <CorrelationHeatmap data={currentDataset.data} />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -349,7 +435,7 @@ export default function EDAPage() {
                 <Button variant="outline" onClick={handleReset}>
                   Start Over
                 </Button>
-                <Button 
+                <Button
                   onClick={() => router.push('/train')}
                 >
                   Continue to Training →

@@ -25,7 +25,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
             {/* Page content */}
             <main className="mt-6">
-              <div className="min-h-[calc(100vh-12rem)]">
+              <div className="min-h-[calc(100vh-12rem)] animate-fadeIn">
                 {children}
               </div>
             </main>

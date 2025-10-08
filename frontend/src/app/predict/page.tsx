@@ -222,93 +222,11 @@ export default function PredictPage() {
           />
         )}
 
-        {/* Model Selection */}
-        <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-gray-100 rounded-xl border border-gray-200">
-              <Database className="h-5 w-5 text-gray-900" />
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900">Selected Model</h2>
-          </div>
-
-          {isLoadingModels ? (
-            <div className="flex items-center justify-center py-8">
-              <RefreshCw className="h-6 w-6 animate-spin text-gray-700 mr-3" />
-              <span className="text-gray-600 font-medium">Loading available models...</span>
-            </div>
-          ) : availableModels.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="p-4 bg-gray-100 rounded-2xl border border-gray-200 w-fit mx-auto mb-6">
-                <Database className="h-16 w-16 text-gray-400" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">No Models Available</h3>
-              <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                You need to train models first before making predictions.
-              </p>
-              <Button onClick={() => window.location.href = '/train'} size="lg">
-                Go to Training
-              </Button>
-            </div>
-          ) : (
-            <>
-              {/* Current Selected Model Display */}
-              {selectedModel ? (
-                <div className="p-5 rounded-2xl border border-gray-300 bg-gradient-to-br from-gray-100 to-gray-50 mb-6 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="p-1.5 bg-white rounded-lg border border-gray-300">
-                          <Check className="h-5 w-5 text-gray-900" />
-                        </div>
-                        <h3 className="font-semibold text-gray-900 text-lg">
-                          {selectedModel.model_name.toUpperCase()}
-                        </h3>
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-gray-300 text-gray-900 text-xs font-medium rounded-xl shadow-sm">
-                          <Zap className="h-3 w-3" />
-                          Best Model
-                        </span>
-                      </div>
-                      <div className="flex gap-6 text-sm text-gray-600">
-                        <span>Type: <span className="font-semibold text-gray-900">{selectedModel.model_type.toUpperCase()}</span></span>
-                        <span>Task: <span className="font-semibold text-gray-900">{selectedModel.task_type}</span></span>
-                        <span>Score: <span className="font-semibold text-gray-900">{selectedModel.best_score.toFixed(4)}</span></span>
-                        <span>Features: <span className="font-semibold text-gray-900">{selectedModel.feature_count}</span></span>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      {selectedModel.has_onnx && (
-                        <span className="px-3 py-1.5 bg-white border border-gray-300 text-gray-900 text-xs font-medium rounded-xl shadow-sm">ONNX</span>
-                      )}
-                      {selectedModel.has_pickle && (
-                        <span className="px-3 py-1.5 bg-white border border-gray-300 text-gray-900 text-xs font-medium rounded-xl shadow-sm">PKL</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              {/* Model Selection Button */}
-              <div className="flex justify-between items-center">
-                <p className="text-sm text-gray-600 font-medium">
-                  {availableModels.length} model{availableModels.length !== 1 ? 's' : ''} available
-                </p>
-                <Button
-                  variant="outline"
-                  onClick={() => setIsModelModalOpen(true)}
-                  className="flex items-center gap-2"
-                >
-                  <Database className="h-4 w-4" />
-                  Choose Different Model
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Input Data */}
-        {selectedModel && (
-          <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+        {/* Two Column Layout */}
+        {selectedModel ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* LEFT COLUMN - Input Data */}
+            <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 bg-gray-100 rounded-xl border border-gray-200">
                 <FileText className="h-5 w-5 text-gray-900" />
@@ -453,6 +371,120 @@ export default function PredictPage() {
                 )}
               </Button>
             </div>
+          </div>
+
+            {/* RIGHT COLUMN - Selected Model */}
+            <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-gray-100 rounded-xl border border-gray-200">
+                  <Database className="h-5 w-5 text-gray-900" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Selected Model</h2>
+              </div>
+
+              {isLoadingModels ? (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="h-6 w-6 animate-spin text-gray-700 mr-3" />
+                  <span className="text-gray-600 font-medium">Loading models...</span>
+                </div>
+              ) : (
+                <>
+                  {/* Current Selected Model Display */}
+                  <div className="p-5 rounded-2xl border border-gray-300 bg-gradient-to-br from-gray-100 to-gray-50 mb-6 shadow-sm">
+                    <div className="flex items-start gap-4 mb-4">
+                      <div className="p-2 bg-white rounded-lg border border-gray-300">
+                        <Check className="h-6 w-6 text-gray-900" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="font-semibold text-gray-900 text-lg">
+                            {selectedModel.model_name.toUpperCase()}
+                          </h3>
+                          <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-white border border-gray-300 text-gray-900 text-xs font-medium rounded-lg shadow-sm">
+                            <Zap className="h-3 w-3" />
+                            Best
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Type:</span>
+                        <span className="font-semibold text-gray-900">{selectedModel.model_type.toUpperCase()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Task:</span>
+                        <span className="font-semibold text-gray-900">{selectedModel.task_type}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Score:</span>
+                        <span className="font-semibold text-gray-900">{selectedModel.best_score.toFixed(4)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Features:</span>
+                        <span className="font-semibold text-gray-900">{selectedModel.feature_count}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 mt-4 pt-4 border-t border-gray-300">
+                      {selectedModel.has_onnx && (
+                        <span className="px-3 py-1.5 bg-white border border-gray-300 text-gray-900 text-xs font-medium rounded-lg shadow-sm">ONNX</span>
+                      )}
+                      {selectedModel.has_pickle && (
+                        <span className="px-3 py-1.5 bg-white border border-gray-300 text-gray-900 text-xs font-medium rounded-lg shadow-sm">PKL</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Model Selection Button */}
+                  <div className="space-y-3">
+                    <p className="text-sm text-gray-600 font-medium">
+                      {availableModels.length} model{availableModels.length !== 1 ? 's' : ''} available
+                    </p>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsModelModalOpen(true)}
+                      className="flex items-center gap-2 w-full justify-center"
+                    >
+                      <Database className="h-4 w-4" />
+                      Choose Different Model
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* No Model Selected - Show loading or empty state */
+          <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-gray-100 rounded-xl border border-gray-200">
+                <Database className="h-5 w-5 text-gray-900" />
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900">Selected Model</h2>
+            </div>
+
+            {isLoadingModels ? (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw className="h-6 w-6 animate-spin text-gray-700 mr-3" />
+                <span className="text-gray-600 font-medium">Loading available models...</span>
+              </div>
+            ) : availableModels.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="p-4 bg-gray-100 rounded-2xl border border-gray-200 w-fit mx-auto mb-6">
+                  <Database className="h-16 w-16 text-gray-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">No Models Available</h3>
+                <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                  You need to train models first before making predictions.
+                </p>
+                <Button onClick={() => window.location.href = '/train'} size="lg">
+                  Go to Training
+                </Button>
+              </div>
+            ) : null}
           </div>
         )}
 
