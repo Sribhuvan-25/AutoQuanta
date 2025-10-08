@@ -144,15 +144,54 @@ class ModelTrainer:
     
     def _setup_cross_validation(self, y: np.ndarray, config: TrainingConfig):
         if config.task_type == 'classification':
+            # Check class distribution to determine appropriate n_splits
+            from collections import Counter
+            class_counts = Counter(y)
+            min_class_samples = min(class_counts.values())
+
+            # n_splits must be less than or equal to the minimum class samples
+            max_possible_splits = min_class_samples
+            effective_n_splits = min(config.cv_folds, max_possible_splits)
+
+            # Warn if we had to reduce splits
+            if effective_n_splits < config.cv_folds:
+                logger.warning(
+                    f"Reducing cross-validation folds from {config.cv_folds} to {effective_n_splits} "
+                    f"because the smallest class has only {min_class_samples} samples."
+                )
+                logger.info(f"Class distribution: {dict(class_counts)}")
+
+            # Minimum of 2 splits required
+            if effective_n_splits < 2:
+                raise ValueError(
+                    f"Cannot perform cross-validation: smallest class has only {min_class_samples} samples. "
+                    f"Need at least 2 samples per class for stratified cross-validation. "
+                    f"Class distribution: {dict(class_counts)}"
+                )
+
             return StratifiedKFold(
-                n_splits=config.cv_folds, 
-                shuffle=True, 
+                n_splits=effective_n_splits,
+                shuffle=True,
                 random_state=self.random_state
             )
         else:
+            # For regression, just ensure we have enough samples
+            effective_n_splits = min(config.cv_folds, len(y))
+            if effective_n_splits < config.cv_folds:
+                logger.warning(
+                    f"Reducing cross-validation folds from {config.cv_folds} to {effective_n_splits} "
+                    f"due to small dataset size ({len(y)} samples)."
+                )
+
+            if effective_n_splits < 2:
+                raise ValueError(
+                    f"Cannot perform cross-validation: dataset has only {len(y)} samples. "
+                    f"Need at least 2 samples for cross-validation."
+                )
+
             return KFold(
-                n_splits=config.cv_folds, 
-                shuffle=True, 
+                n_splits=effective_n_splits,
+                shuffle=True,
                 random_state=self.random_state
             )
     

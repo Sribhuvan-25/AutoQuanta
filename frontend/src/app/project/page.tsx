@@ -7,8 +7,9 @@ import { ArrowRight, Plus, FolderOpen, Upload, BarChart3, Brain, Zap, X } from '
 import { Button } from '@/components/ui/button';
 import { FileUpload } from '@/components/common/FileUpload';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { useAppSelector } from '@/store/hooks';
+import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { selectIsProcessing, selectProcessingStage, selectCurrentDataset } from '@/store/slices/dataSlice';
+import { loadProject } from '@/store/slices/projectSlice';
 import { tauriAPI } from '@/lib/tauri';
 
 interface Project {
@@ -33,10 +34,11 @@ interface APIProject {
 
 export default function ProjectPage() {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const [error, setError] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   // New Project Modal state
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [projectName, setProjectName] = useState('');
@@ -84,20 +86,42 @@ export default function ProjectPage() {
       
       if (data.success) {
         // Convert API format to frontend format
-        const formattedProjects: Project[] = data.projects.map((proj: APIProject) => ({
-          id: proj.id,
-          name: proj.name,
-          description: proj.description,
-          createdAt: new Date(proj.created_at * 1000).toISOString().split('T')[0],
-          lastModified: new Date(proj.updated_at * 1000).toISOString().split('T')[0],
-          fileCount: proj.files?.length || 0,
-          status: proj.status as 'active' | 'archived'
-        }));
+        const formattedProjects: Project[] = data.projects.map((proj: APIProject) => {
+          // Safely handle timestamps
+          const safeDate = (timestamp: number | null | undefined) => {
+            if (!timestamp || timestamp <= 0) {
+              return new Date().toISOString().split('T')[0];
+            }
+            try {
+              return new Date(timestamp * 1000).toISOString().split('T')[0];
+            } catch {
+              return new Date().toISOString().split('T')[0];
+            }
+          };
+
+          return {
+            id: proj.id,
+            name: proj.name,
+            description: proj.description,
+            createdAt: safeDate(proj.created_at),
+            lastModified: safeDate(proj.updated_at),
+            fileCount: proj.files?.length || 0,
+            status: proj.status as 'active' | 'archived'
+          };
+        });
         setProjects(formattedProjects);
       }
     } catch (error) {
       console.error('Failed to load projects:', error);
-      setError('Failed to load projects');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load projects';
+      setError(errorMessage);
+      // Log more details for debugging
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -122,12 +146,18 @@ export default function ProjectPage() {
   };
 
   // Handle new project creation
-  const handleCreateProject = async () => {
+  const handleCreateProject = async (e?: React.MouseEvent) => {
+    // Prevent any default behavior or event bubbling
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
     if (!projectName.trim()) {
       setError('Project name is required');
       return;
     }
-    
+
     if (!selectedProjectDirectory) {
       setError('Please select a directory for the project');
       return;
@@ -178,6 +208,27 @@ export default function ProjectPage() {
     setError(errors[0] || 'File validation failed');
     console.error('File validation failed:', errors);
   }, []);
+
+  const handleOpenProject = useCallback(async (projectId: string) => {
+    try {
+      // Dispatch Redux action to load project
+      const result = await dispatch(loadProject(projectId));
+
+      if (loadProject.fulfilled.match(result)) {
+        // Project loaded successfully
+        console.log(`Opened project: ${result.payload.metadata.name}`);
+
+        // Redirect to home
+        router.push('/');
+      } else {
+        // Handle error
+        throw new Error('Failed to load project');
+      }
+    } catch (error) {
+      console.error('Failed to open project:', error);
+      setError('Failed to open project');
+    }
+  }, [dispatch, router]);
 
   const quickActions = [
     {
@@ -348,7 +399,8 @@ export default function ProjectPage() {
               projects.map((project) => (
               <div
                 key={project.id}
-                className="flex items-center justify-between p-4 rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all bg-white/40"
+                className="flex items-center justify-between p-4 rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all bg-white/40 cursor-pointer"
+                onClick={() => handleOpenProject(project.id)}
               >
                 <div className="flex items-center gap-x-3">
                   <div className="p-2 bg-gray-100 rounded-lg border border-gray-200">
@@ -356,7 +408,7 @@ export default function ProjectPage() {
                   </div>
                   <div>
                     <h3 className="font-medium text-gray-900">{project.name}</h3>
-                    <p className="text-sm text-gray-600">{project.description}</p>
+                    <p className="text-sm text-gray-600">{project.description || 'No description'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-x-4">
@@ -364,7 +416,15 @@ export default function ProjectPage() {
                     <p className="text-sm text-gray-700 font-medium">{project.fileCount} files</p>
                     <p className="text-xs text-gray-500">Modified {project.lastModified}</p>
                   </div>
-                  <Button variant="ghost" size="sm" className="hover:bg-gray-100">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="hover:bg-gray-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenProject(project.id);
+                    }}
+                  >
                     Open
                   </Button>
                 </div>
@@ -493,9 +553,10 @@ export default function ProjectPage() {
                   Cancel
                 </Button>
                 <Button
-                  onClick={handleCreateProject}
+                  onClick={(e) => handleCreateProject(e)}
                   disabled={!projectName.trim() || !selectedProjectDirectory || isCreatingProject}
                   className="bg-gray-900 hover:bg-gray-800 text-white rounded-xl"
+                  type="button"
                 >
                   {isCreatingProject ? 'Creating...' : 'Create Project'}
                 </Button>

@@ -64,21 +64,94 @@ export function ExportHub({
 
   const handlePDFGeneration = async (config: any) => {
     console.log('Generating PDF with config:', config);
-    // TODO: Implement actual PDF generation
-    alert('PDF generation would happen here. This requires a backend endpoint.');
+    try {
+      const response = await fetch('http://localhost:8000/api/export/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...config,
+          modelData: modelData,
+          trainingResults: trainingResults
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('PDF generation failed');
+      }
+
+      const result = await response.json();
+
+      // Download the structured report data
+      const blob = new Blob([JSON.stringify(result.report_data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${config.title.replace(/ /g, '_')}_report.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      alert('PDF report data generated successfully! For full PDF, consider integrating with a PDF service.');
+    } catch (error) {
+      console.error('PDF generation failed:', error);
+      alert('Failed to generate PDF report: ' + (error as Error).message);
+    }
   };
 
   const handleHTMLGeneration = async (config: any) => {
     console.log('Generating HTML with config:', config);
-    // TODO: Implement actual HTML generation
-    alert('HTML generation would happen here.');
+    try {
+      const response = await fetch('http://localhost:8000/api/export/html', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...config,
+          modelData: modelData,
+          trainingResults: trainingResults
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('HTML generation failed');
+      }
+
+      // Download the HTML file
+      const htmlContent = await response.text();
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${config.title.replace(/ /g, '_')}.html`;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      alert('HTML report generated and downloaded successfully!');
+    } catch (error) {
+      console.error('HTML generation failed:', error);
+      alert('Failed to generate HTML report: ' + (error as Error).message);
+    }
   };
 
-  const handleSaveTemplate = (template: any) => {
+  const handleSaveTemplate = async (template: any) => {
     console.log('Saving template:', template);
-    // TODO: Save template to backend/localStorage
-    localStorage.setItem(`report_template_${template.id}`, JSON.stringify(template));
-    alert(`Template "${template.name}" saved successfully!`);
+    try {
+      const response = await fetch('http://localhost:8000/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(template)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save template');
+      }
+
+      const result = await response.json();
+      alert(`Template "${template.name}" saved successfully!`);
+    } catch (error) {
+      console.error('Failed to save template:', error);
+      // Fallback to localStorage
+      localStorage.setItem(`report_template_${template.id}`, JSON.stringify(template));
+      alert(`Template "${template.name}" saved to local storage (backend unavailable)`);
+    }
   };
 
   return (

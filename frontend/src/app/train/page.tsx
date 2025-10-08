@@ -6,6 +6,7 @@ import { TrainingConfig } from '@/components/training/TrainingConfig';
 import { TrainingProgress } from '@/components/training/TrainingProgress';
 import { TrainingResults } from '@/components/training/TrainingResults';
 import { ModelDetailsModal } from '@/components/training/ModelDetailsModal';
+import { ExportHub } from '@/components/reports/ExportHub';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { 
   startTraining, 
@@ -51,6 +52,7 @@ export default function TrainPage() {
   const [showResults, setShowResults] = useState(false);
   const [selectedModel, setSelectedModel] = useState<ModelTrainingResult | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showExportHub, setShowExportHub] = useState(false);
 
   const handleStartTraining = async (config: TrainingConfigType) => {
     try {
@@ -237,6 +239,29 @@ export default function TrainPage() {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Export Hub */}
+            {!showExportHub && (
+              <div className="flex justify-center">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowExportHub(true)}
+                  className="gap-2"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Generate Reports & Export
+                </Button>
+              </div>
+            )}
+
+            {showExportHub && (
+              <ExportHub
+                modelData={bestModel}
+                trainingResults={currentResults}
+              />
             )}
           </>
         )}
