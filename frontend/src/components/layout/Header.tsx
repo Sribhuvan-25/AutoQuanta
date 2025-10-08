@@ -69,7 +69,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   return (
     <>
-      <header className="bg-white/80 backdrop-blur-lg border border-white/40 rounded-2xl shadow-sm p-4">
+      <header className="bg-white/80 backdrop-blur-lg border border-white/40 rounded-2xl shadow-sm p-4 relative z-50">
         <div className="flex items-center gap-x-4">
           {/* Mobile menu button */}
           <Button
@@ -126,7 +126,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
                   {/* Dropdown menu */}
                   {showProjectDropdown && (
-                    <div className="absolute top-full left-0 mt-1 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                    <div className="absolute top-full left-0 mt-1 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-[9999]">
                       <div className="p-2">
                         {/* New project button */}
                         <Button
@@ -212,7 +212,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         {/* Click outside to close dropdown */}
         {showProjectDropdown && (
           <div
-            className="fixed inset-0 z-40"
+            className="fixed inset-0 z-[9998]"
             onClick={() => setShowProjectDropdown(false)}
           />
         )}
