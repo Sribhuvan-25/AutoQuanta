@@ -36,19 +36,19 @@ export interface PreprocessingConfig {
 }
 
 export const DEFAULT_PREPROCESSING_CONFIG: PreprocessingConfig = {
-  enable_validation: true,
-  remove_duplicates: true,
-  fix_data_types: true,
-  remove_constant_features: true,
-  remove_high_missing: true,
+  enable_validation: false,
+  remove_duplicates: false,
+  fix_data_types: true, // Keep this - it's essential
+  remove_constant_features: false,
+  remove_high_missing: false,
 
-  handle_missing: true,
+  handle_missing: true, // Keep this - essential for training
   missing_strategy: 'median',
 
-  handle_outliers: true,
+  handle_outliers: false, // User can enable if needed
   outlier_method: 'iqr',
 
-  scaling_strategy: 'standard',
+  scaling_strategy: 'standard', // Keep this - required for many models
 
   categorical_encoding: 'onehot',
   max_cardinality: 50,

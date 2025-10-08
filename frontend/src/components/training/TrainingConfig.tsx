@@ -46,7 +46,7 @@ export function TrainingConfig({ onStartTraining, isTraining, className }: Train
     cv_folds: 5,
     random_seed: 42,
     models_to_try: ['random_forest', 'gradient_boosting'],
-    preprocessing: DEFAULT_PREPROCESSING_CONFIG
+    preprocessing: undefined // No preprocessing by default
   });
 
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -321,7 +321,14 @@ export function TrainingConfig({ onStartTraining, isTraining, className }: Train
       {/* Preprocessing Configuration */}
       <div className="border-t pt-4">
         <button
-          onClick={() => setShowPreprocessing(!showPreprocessing)}
+          onClick={() => {
+            const newShowPreprocessing = !showPreprocessing;
+            setShowPreprocessing(newShowPreprocessing);
+            // Initialize with defaults when first opened
+            if (newShowPreprocessing && !config.preprocessing) {
+              setConfig(prev => ({ ...prev, preprocessing: DEFAULT_PREPROCESSING_CONFIG }));
+            }
+          }}
           className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
         >
           {showPreprocessing ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -329,10 +336,10 @@ export function TrainingConfig({ onStartTraining, isTraining, className }: Train
           <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">Optional</span>
         </button>
 
-        {showPreprocessing && (
+        {showPreprocessing && config.preprocessing && (
           <div className="mt-4">
             <PreprocessingConfigPanel
-              config={config.preprocessing || DEFAULT_PREPROCESSING_CONFIG}
+              config={config.preprocessing}
               onChange={(preprocessingConfig) => setConfig(prev => ({ ...prev, preprocessing: preprocessingConfig }))}
             />
           </div>
