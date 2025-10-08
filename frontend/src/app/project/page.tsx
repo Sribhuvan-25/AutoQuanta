@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Plus, FolderOpen, Upload, BarChart3, Brain, Zap, X } from 'lucide-react';
+import { ArrowRight, Plus, FolderOpen, Upload, BarChart3, Brain, Zap, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FileUpload } from '@/components/common/FileUpload';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -11,6 +11,7 @@ import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { selectIsProcessing, selectProcessingStage, selectCurrentDataset } from '@/store/slices/dataSlice';
 import { loadProject } from '@/store/slices/projectSlice';
 import { tauriAPI } from '@/lib/tauri';
+import { cn } from '@/lib/utils';
 
 interface Project {
   id: string;
@@ -46,6 +47,12 @@ export default function ProjectPage() {
   const [selectedProjectDirectory, setSelectedProjectDirectory] = useState<string | null>(null);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
 
+  // View all projects modal
+  const [showAllProjectsModal, setShowAllProjectsModal] = useState(false);
+
+  // Getting started collapse
+  const [showGettingStarted, setShowGettingStarted] = useState(false);
+
   // Redux state
   const isProcessing = useAppSelector(selectIsProcessing);
   const processingStage = useAppSelector(selectProcessingStage);
@@ -53,7 +60,7 @@ export default function ProjectPage() {
 
   const handleFileSelect = useCallback((filePath: string, fileInfo?: { name: string; size: number; type: string }) => {
     console.log('File selected:', filePath, fileInfo);
-    
+
     // Store file info in sessionStorage for the EDA page to pick up
     if (fileInfo) {
       sessionStorage.setItem('uploadedFile', JSON.stringify({
@@ -83,7 +90,7 @@ export default function ProjectPage() {
       setIsLoading(true);
       const response = await fetch('http://localhost:8000/projects');
       const data = await response.json();
-      
+
       if (data.success) {
         // Convert API format to frontend format
         const formattedProjects: Project[] = data.projects.map((proj: APIProject) => {
@@ -170,28 +177,28 @@ export default function ProjectPage() {
       const response = await fetch('http://localhost:8000/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          name: projectName.trim(), 
+        body: JSON.stringify({
+          name: projectName.trim(),
           description: projectDescription.trim(),
           directory: selectedProjectDirectory
         })
       });
-      
+
       const data = await response.json();
       if (data.success) {
         // Store project directory globally for all save operations
         localStorage.setItem('currentProjectDirectory', selectedProjectDirectory);
         localStorage.setItem('currentProjectId', data.project.id);
         localStorage.setItem('currentProjectName', projectName.trim());
-        
+
         loadProjects(); // Refresh list
-        
+
         // Reset modal state
         setShowNewProjectModal(false);
         setProjectName('');
         setProjectDescription('');
         setSelectedProjectDirectory(null);
-        
+
         return data.project;
       } else {
         throw new Error(data.error || 'Failed to create project');
@@ -254,9 +261,13 @@ export default function ProjectPage() {
     }
   ];
 
+  // Show first 3 projects in preview, rest in modal
+  const previewProjects = projects.slice(0, 3);
+  const hasMoreProjects = projects.length > 3;
+
   return (
     <AppLayout>
-      <div className="space-y-8">
+      <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -269,182 +280,268 @@ export default function ProjectPage() {
           </Button>
         </div>
 
-        {/* File Upload Section */}
-        <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="p-2 bg-gray-100 rounded-xl border border-gray-200">
-              <Upload className="h-6 w-6 text-gray-900" />
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900">Upload Data</h2>
-          </div>
-          <p className="text-sm text-gray-600 mb-6">
-            Upload a CSV file to start analyzing your data and training models.
-          </p>
-
-          {/* Error Display */}
-          {error && (
-            <div className="mb-6 p-4 bg-white/60 backdrop-blur-2xl border border-red-200 rounded-xl shadow-sm">
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-red-50 rounded-lg border border-red-200">
-                  <X className="h-4 w-4 text-red-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-900">{error}</p>
-                  <button
-                    onClick={() => setError(null)}
-                    className="text-xs text-gray-600 hover:text-gray-900 mt-2 font-medium"
-                  >
-                    Dismiss
-                  </button>
-                </div>
+        {/* Two Column Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* LEFT HALF - Upload Data */}
+          <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="p-2 bg-gray-100 rounded-xl border border-gray-200">
+                <Upload className="h-6 w-6 text-gray-900" />
               </div>
+              <h2 className="text-xl font-semibold text-gray-900">Upload Data</h2>
             </div>
-          )}
-          
-          <FileUpload
-            onFileSelect={handleFileSelect}
-            onError={handleFileError}
-            onValidationFailed={handleValidationFailed}
-            onProcessingComplete={handleProcessingComplete}
-            title="Upload CSV File"
-            description={isProcessing 
-              ? `Processing file: ${processingStage}...` 
-              : "Drag and drop your CSV file here or click to browse"
-            }
-            acceptedExtensions={['csv']}
-            maxSizeBytes={50 * 1024 * 1024} // 50MB
-            disabled={isProcessing}
-            autoProcess={true}
-          />
+            <p className="text-sm text-gray-600 mb-6">
+              Upload a CSV file to start analyzing your data and training models.
+            </p>
 
-          {/* Data Processing Status */}
-          {currentDataset && (
-            <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-xl shadow-sm">
-              <div className="flex items-center gap-x-3 mb-2">
-                <div className="p-1.5 bg-white rounded-lg border border-gray-300 shadow-sm">
-                  <div className="h-2 w-2 bg-gray-900 rounded-full"></div>
-                </div>
-                <p className="text-sm text-gray-900 font-medium">
-                  Data processed successfully: {currentDataset.fileName}
-                </p>
-              </div>
-              <p className="text-xs text-gray-600 ml-10">
-                {currentDataset.metadata.rowCount.toLocaleString()} rows × {currentDataset.metadata.columnCount} columns
-              </p>
-              <div className="mt-3 ml-10">
-                <Button
-                  size="sm"
-                  onClick={() => router.push('/eda')}
-                  className="bg-gray-900 hover:bg-gray-800 text-white"
-                >
-                  View Data →
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Quick Actions */}
-        <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {quickActions.map((action) => (
-              <Link
-                key={action.title}
-                href={action.href}
-                className="group p-4 rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-xl hover:-translate-y-1 hover:scale-[1.02] transition-all duration-300 ease-out bg-white/40"
-              >
-                <div className="flex items-center gap-x-3">
-                  <div className={`p-2 rounded-xl ${action.color} border border-gray-200 shadow-sm`}>
-                    <action.icon className="h-5 w-5" />
+            {/* Error Display */}
+            {error && (
+              <div className="mb-6 p-4 bg-white/60 backdrop-blur-2xl border border-red-200 rounded-xl shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-red-50 rounded-lg border border-red-200">
+                    <X className="h-4 w-4 text-red-600" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-medium text-gray-900 transition-colors">
-                      {action.title}
-                    </h3>
-                    <p className="text-sm text-gray-600 mt-0.5">
-                      {action.description}
-                    </p>
+                    <p className="text-sm text-gray-900">{error}</p>
+                    <button
+                      onClick={() => setError(null)}
+                      className="text-xs text-gray-600 hover:text-gray-900 mt-2 font-medium"
+                    >
+                      Dismiss
+                    </button>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-gray-900 transition-colors" />
                 </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* Recent Projects */}
-        <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">Recent Projects</h2>
-            <Link href="/project" className="text-sm text-gray-700 hover:text-gray-900 font-medium">
-              View all
-            </Link>
-          </div>
-
-          <div className="space-y-3">
-            {isLoading ? (
-              <div className="flex items-center justify-center p-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mr-3"></div>
-                <span className="text-gray-600">Loading projects...</span>
               </div>
-            ) : projects.length === 0 ? (
-              <div className="text-center p-12 text-gray-500">
-                <div className="p-4 bg-gray-100 rounded-2xl border border-gray-200 inline-flex mb-4">
-                  <FolderOpen className="h-12 w-12 text-gray-400" />
+            )}
+
+            <FileUpload
+              onFileSelect={handleFileSelect}
+              onError={handleFileError}
+              onValidationFailed={handleValidationFailed}
+              onProcessingComplete={handleProcessingComplete}
+              title="Upload CSV File"
+              description={isProcessing
+                ? `Processing file: ${processingStage}...`
+                : "Drag and drop your CSV file here or click to browse"
+              }
+              acceptedExtensions={['csv']}
+              maxSizeBytes={50 * 1024 * 1024} // 50MB
+              disabled={isProcessing}
+              autoProcess={true}
+            />
+
+            {/* Data Processing Status */}
+            {currentDataset && (
+              <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-xl shadow-sm">
+                <div className="flex items-center gap-x-3 mb-2">
+                  <div className="p-1.5 bg-white rounded-lg border border-gray-300 shadow-sm">
+                    <div className="h-2 w-2 bg-gray-900 rounded-full"></div>
+                  </div>
+                  <p className="text-sm text-gray-900 font-medium">
+                    Data processed successfully: {currentDataset.fileName}
+                  </p>
                 </div>
-                <p className="text-sm">No projects yet. Create your first project to get started.</p>
-              </div>
-            ) : (
-              projects.map((project) => (
-              <div
-                key={project.id}
-                className="flex items-center justify-between p-4 rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all bg-white/40 cursor-pointer"
-                onClick={() => handleOpenProject(project.id)}
-              >
-                <div className="flex items-center gap-x-3">
-                  <div className="p-2 bg-gray-100 rounded-lg border border-gray-200">
-                    <FolderOpen className="h-5 w-5 text-gray-900" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-gray-900">{project.name}</h3>
-                    <p className="text-sm text-gray-600">{project.description || 'No description'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-x-4">
-                  <div className="text-right">
-                    <p className="text-sm text-gray-700 font-medium">{project.fileCount} files</p>
-                    <p className="text-xs text-gray-500">Modified {project.lastModified}</p>
-                  </div>
+                <p className="text-xs text-gray-600 ml-10">
+                  {currentDataset.metadata.rowCount.toLocaleString()} rows × {currentDataset.metadata.columnCount} columns
+                </p>
+                <div className="mt-3 ml-10">
                   <Button
-                    variant="ghost"
                     size="sm"
-                    className="hover:bg-gray-100"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleOpenProject(project.id);
-                    }}
+                    onClick={() => router.push('/eda')}
+                    className="bg-gray-900 hover:bg-gray-800 text-white"
                   >
-                    Open
+                    View Data →
                   </Button>
                 </div>
               </div>
-              ))
             )}
+
+            {/* Getting Started Guide - Collapsible */}
+            <div className="mt-6 border-t pt-6">
+              <button
+                onClick={() => setShowGettingStarted(!showGettingStarted)}
+                className="flex items-center justify-between w-full text-left"
+              >
+                <h3 className="text-lg font-semibold text-gray-900">Getting Started</h3>
+                {showGettingStarted ? (
+                  <ChevronUp className="h-5 w-5 text-gray-600" />
+                ) : (
+                  <ChevronDown className="h-5 w-5 text-gray-600" />
+                )}
+              </button>
+
+              {showGettingStarted && (
+                <div className="mt-4 space-y-3 text-sm text-gray-700">
+                  <p>1. <strong className="text-gray-900">Upload your data:</strong> Start by uploading a CSV file using the upload area above.</p>
+                  <p>2. <strong className="text-gray-900">Explore your data:</strong> Use the Data Explorer to understand your data structure and patterns.</p>
+                  <p>3. <strong className="text-gray-900">Train models:</strong> Automatically train and compare multiple machine learning models.</p>
+                  <p>4. <strong className="text-gray-900">Make predictions:</strong> Use your trained models to make predictions on new data.</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT HALF */}
+          <div className="space-y-6">
+            {/* Quick Actions */}
+            <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6">Quick Actions</h2>
+              <div className="space-y-3">
+                {quickActions.map((action) => (
+                  <Link
+                    key={action.title}
+                    href={action.href}
+                    className="group p-4 rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all bg-white/40 flex items-center gap-x-3"
+                  >
+                    <div className={`p-2 rounded-xl ${action.color} border border-gray-200 shadow-sm`}>
+                      <action.icon className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-medium text-gray-900 transition-colors">
+                        {action.title}
+                      </h3>
+                      <p className="text-sm text-gray-600 mt-0.5">
+                        {action.description}
+                      </p>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-gray-900 transition-colors" />
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            {/* Recent Projects */}
+            <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Recent Projects</h2>
+                {hasMoreProjects && (
+                  <button
+                    onClick={() => setShowAllProjectsModal(true)}
+                    className="text-sm text-gray-700 hover:text-gray-900 font-medium"
+                  >
+                    View all ({projects.length})
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                {isLoading ? (
+                  <div className="flex items-center justify-center p-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mr-3"></div>
+                    <span className="text-gray-600">Loading projects...</span>
+                  </div>
+                ) : previewProjects.length === 0 ? (
+                  <div className="text-center p-12 text-gray-500">
+                    <div className="p-4 bg-gray-100 rounded-2xl border border-gray-200 inline-flex mb-4">
+                      <FolderOpen className="h-12 w-12 text-gray-400" />
+                    </div>
+                    <p className="text-sm">No projects yet. Create your first project to get started.</p>
+                  </div>
+                ) : (
+                  previewProjects.map((project) => (
+                    <div
+                      key={project.id}
+                      className="flex items-center justify-between p-4 rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all bg-white/40 cursor-pointer"
+                      onClick={() => handleOpenProject(project.id)}
+                    >
+                      <div className="flex items-center gap-x-3 flex-1 min-w-0">
+                        <div className="p-2 bg-gray-100 rounded-lg border border-gray-200 flex-shrink-0">
+                          <FolderOpen className="h-5 w-5 text-gray-900" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-medium text-gray-900 truncate">{project.name}</h3>
+                          <p className="text-sm text-gray-600 truncate">{project.description || 'No description'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-x-3 flex-shrink-0 ml-4">
+                        <div className="text-right">
+                          <p className="text-sm text-gray-700 font-medium">{project.fileCount} files</p>
+                          <p className="text-xs text-gray-500">{project.lastModified}</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="hover:bg-gray-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenProject(project.id);
+                          }}
+                        >
+                          Open
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Getting Started Guide */}
-        <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Getting Started</h2>
-          <div className="space-y-3 text-sm text-gray-700">
-            <p>1. <strong className="text-gray-900">Upload your data:</strong> Start by uploading a CSV file using the upload area above.</p>
-            <p>2. <strong className="text-gray-900">Explore your data:</strong> Use the Data Explorer to understand your data structure and patterns.</p>
-            <p>3. <strong className="text-gray-900">Train models:</strong> Automatically train and compare multiple machine learning models.</p>
-            <p>4. <strong className="text-gray-900">Make predictions:</strong> Use your trained models to make predictions on new data.</p>
+        {/* All Projects Modal */}
+        {showAllProjectsModal && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white/95 backdrop-blur-xl rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-xl border border-white/40 flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900">All Projects ({projects.length})</h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAllProjectsModal(false)}
+                  className="hover:bg-gray-100"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+
+              {/* Content - Scrollable */}
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="space-y-3">
+                  {projects.map((project) => (
+                    <div
+                      key={project.id}
+                      className="flex items-center justify-between p-4 rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all bg-white/40 cursor-pointer"
+                      onClick={() => {
+                        handleOpenProject(project.id);
+                        setShowAllProjectsModal(false);
+                      }}
+                    >
+                      <div className="flex items-center gap-x-3 flex-1 min-w-0">
+                        <div className="p-2 bg-gray-100 rounded-lg border border-gray-200 flex-shrink-0">
+                          <FolderOpen className="h-5 w-5 text-gray-900" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-medium text-gray-900 truncate">{project.name}</h3>
+                          <p className="text-sm text-gray-600 truncate">{project.description || 'No description'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-x-3 flex-shrink-0 ml-4">
+                        <div className="text-right">
+                          <p className="text-sm text-gray-700 font-medium">{project.fileCount} files</p>
+                          <p className="text-xs text-gray-500">{project.lastModified}</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="hover:bg-gray-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenProject(project.id);
+                            setShowAllProjectsModal(false);
+                          }}
+                        >
+                          Open
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-        
+        )}
+
         {/* New Project Modal */}
         {showNewProjectModal && (
           <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
