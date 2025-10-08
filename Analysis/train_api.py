@@ -399,6 +399,15 @@ def train_from_api(csv_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
             if conversion_rate > 0.9:
                 logger.info(f"Target column '{target_column}' detected as text but {conversion_rate:.1%} values are numeric. Converting to numeric.")
                 df[target_column] = target_numeric
+
+                # Drop rows with NaN in target column after conversion
+                rows_before = len(df)
+                df = df[df[target_column].notna()].copy()
+                rows_after = len(df)
+
+                if rows_before > rows_after:
+                    logger.warning(f"Dropped {rows_before - rows_after} rows with non-numeric values in target column")
+
                 target_series = df[target_column]
                 is_numeric = True
 
@@ -423,13 +432,27 @@ def train_from_api(csv_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
                 f"3. Select a different target column"
             )
         
+        # Final check: Remove any remaining NaN values in target column
+        nan_count = df[target_column].isna().sum()
+        if nan_count > 0:
+            logger.warning(f"Found {nan_count} NaN values in target column. Removing these rows.")
+            rows_before = len(df)
+            df = df[df[target_column].notna()].copy()
+            rows_after = len(df)
+            logger.info(f"Dataset reduced from {rows_before} to {rows_after} rows after removing NaN values")
+
+        # Verify we still have enough data
+        if len(df) < 10:
+            raise ValueError(f"Not enough valid data rows ({len(df)}) after cleaning. Need at least 10 rows for training.")
+
         # Map frontend model names to Python model names
         python_models = map_frontend_to_python_models(config.get('models_to_try', ['random_forest']))
-        
+
         logger.info(f"Target column: {target_column}")
         logger.info(f"Task type: {config.get('task_type', 'classification')}")
         logger.info(f"Models to try: {python_models}")
-        
+        logger.info(f"Final dataset shape: {df.shape}")
+
         # Stage 2: Data Preparation
         emit_progress("preparing", 20, "Preparing data and preprocessing...")
         
