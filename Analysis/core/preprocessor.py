@@ -715,7 +715,54 @@ class AutoPreprocessor:
                     X_clean = pd.DataFrame(X_clean, columns=self.feature_engineer.get_feature_names_out())
 
             # Separate column types (after feature engineering)
+            # Re-check column types to ensure they're correctly classified after validation
             numeric_columns, categorical_columns = self._separate_column_types(X_clean)
+
+            # Double-check and clean numeric columns - convert strings to numeric where possible
+            truly_numeric = []
+            for col in numeric_columns:
+                try:
+                    # Check if already numeric dtype - keep as is
+                    if pd.api.types.is_numeric_dtype(X_clean[col]):
+                        truly_numeric.append(col)
+                        continue
+
+                    # Not numeric dtype, try to convert
+                    # Test conversion on sample first
+                    test_series = X_clean[col].dropna().head(100)
+                    if len(test_series) > 0:
+                        pd.to_numeric(test_series, errors='raise')
+
+                    truly_numeric.append(col)
+                except (ValueError, TypeError) as e:
+                    # Move to categorical if conversion fails
+                    sample_values = X_clean[col].dropna().head(5).tolist()
+                    logger.warning(f"Column '{col}' detected as numeric type but contains non-numeric values: {sample_values}")
+                    logger.warning(f"Column '{col}' will be treated as categorical. Error: {str(e)[:100]}")
+                    categorical_columns.append(col)
+
+            # Also check categorical columns - some might actually be numeric (object dtype with numeric values)
+            truly_categorical = []
+            for col in categorical_columns:
+                # Try to convert to numeric
+                converted = pd.to_numeric(X_clean[col], errors='coerce')
+                non_null_original = X_clean[col].notna().sum()
+                non_null_converted = converted.notna().sum()
+
+                # If >80% of values convert successfully, treat as numeric
+                conversion_rate = non_null_converted / non_null_original if non_null_original > 0 else 0
+                if conversion_rate > 0.8:
+                    logger.info(f"Column '{col}' detected as categorical but {conversion_rate:.1%} values are numeric. Converting to numeric.")
+                    # Convert the column to numeric
+                    X_clean[col] = converted
+                    truly_numeric.append(col)
+                else:
+                    truly_categorical.append(col)
+
+            numeric_columns = truly_numeric
+            categorical_columns = truly_categorical
+
+            logger.info(f"After validation: {len(numeric_columns)} numeric columns, {len(categorical_columns)} categorical columns")
             
             # Filter categorical columns by cardinality
             low_card_categorical, high_card_categorical = self._filter_by_cardinality(
@@ -754,10 +801,10 @@ class AutoPreprocessor:
                     # Pass-through (no processing needed)
                     self.pipeline = None
             
-            # Fit the pipeline
-            X_for_fit = X.copy()
+            # Fit the pipeline using the cleaned/converted data
+            # X_clean has all the type conversions applied
             if self.pipeline is not None:
-                self.pipeline.fit(X_for_fit)
+                self.pipeline.fit(X_clean)
             
             # Store feature names
             self.feature_names_out = self._get_feature_names_out(
@@ -787,6 +834,27 @@ class AutoPreprocessor:
         # Remove target column if present
         if self.target_column in X_copy.columns:
             X_copy = X_copy.drop(columns=[self.target_column])
+
+        # Apply data validation transformations (if enabled)
+        if self.enable_validation and self.data_validator is not None:
+            X_copy = self.data_validator.transform(X_copy)
+
+            # Convert back to DataFrame if needed
+            if not isinstance(X_copy, pd.DataFrame):
+                # Get column names from the validator or use original columns
+                col_names = [c for c in X.columns if c != self.target_column and c not in self.dropped_columns]
+                X_copy = pd.DataFrame(X_copy, columns=col_names)
+
+        # Apply the same type conversions that were done during fit
+        # Convert categorical columns that should be numeric
+        for col in X_copy.columns:
+            # Try to convert to numeric if it's object dtype
+            if X_copy[col].dtype == 'object':
+                converted = pd.to_numeric(X_copy[col], errors='coerce')
+                # Check if conversion is successful for most values
+                non_null_count = X_copy[col].notna().sum()
+                if non_null_count > 0 and converted.notna().sum() / non_null_count > 0.8:
+                    X_copy[col] = converted
 
         # Apply feature engineering first (if enabled)
         if self.enable_feature_engineering and self.feature_engineer is not None:
@@ -926,19 +994,24 @@ class AutoPreprocessor:
 
             # Add missing value handling (after outlier handling)
             if self.handle_missing:
-                if self.missing_strategy == 'median':
-                    numeric_steps.append(('imputer', SimpleImputer(strategy='median')))
-                elif self.missing_strategy == 'mean':
-                    numeric_steps.append(('imputer', SimpleImputer(strategy='mean')))
-                elif self.missing_strategy == 'mode':
-                    numeric_steps.append(('imputer', SimpleImputer(strategy='most_frequent')))
-                elif self.missing_strategy == 'knn':
-                    numeric_steps.append(('imputer', KNNImputer(n_neighbors=5)))
-                elif self.missing_strategy == 'iterative':
-                    numeric_steps.append(('imputer', IterativeImputer(random_state=42, max_iter=10)))
-                else:
-                    # Default to median
-                    numeric_steps.append(('imputer', SimpleImputer(strategy='median')))
+                try:
+                    if self.missing_strategy == 'median':
+                        numeric_steps.append(('imputer', SimpleImputer(strategy='median')))
+                    elif self.missing_strategy == 'mean':
+                        numeric_steps.append(('imputer', SimpleImputer(strategy='mean')))
+                    elif self.missing_strategy == 'mode':
+                        numeric_steps.append(('imputer', SimpleImputer(strategy='most_frequent')))
+                    elif self.missing_strategy == 'knn':
+                        numeric_steps.append(('imputer', KNNImputer(n_neighbors=5)))
+                    elif self.missing_strategy == 'iterative':
+                        numeric_steps.append(('imputer', IterativeImputer(random_state=42, max_iter=10)))
+                    else:
+                        # Default to median
+                        numeric_steps.append(('imputer', SimpleImputer(strategy='median')))
+                except Exception as e:
+                    logger.error(f"Error setting up imputer with strategy '{self.missing_strategy}': {e}")
+                    logger.info(f"Numeric columns: {numeric_columns}")
+                    raise ValueError(f"Cannot use {self.missing_strategy} strategy. Ensure all columns are properly typed. Error: {e}")
 
             # Add scaling
             if self.scaling_strategy == 'standard':

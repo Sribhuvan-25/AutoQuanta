@@ -17,13 +17,15 @@ import traceback
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse, Response
 from pydantic import BaseModel
 import pandas as pd
 import uvicorn
 import asyncio
 from collections import defaultdict
 import uuid
+from jinja2 import Template
+from datetime import datetime
 
 # Add the project root to the path
 project_root = Path(__file__).parent
@@ -82,6 +84,40 @@ class PredictionResponse(BaseModel):
 class DataProfileResponse(BaseModel):
     success: bool
     profile: Dict[str, Any] = None
+    error: str = None
+
+class ExportPDFRequest(BaseModel):
+    title: str
+    author: str = ""
+    includeSections: List[str]
+    includeCharts: bool = True
+    includeCode: bool = False
+    includeRawData: bool = False
+    colorScheme: str = "professional"
+    pageSize: str = "A4"
+    modelData: Dict[str, Any] = None
+    trainingResults: Dict[str, Any] = None
+
+class ExportHTMLRequest(BaseModel):
+    title: str
+    includeInteractiveCharts: bool = True
+    includeDarkMode: bool = True
+    includeSearchFilter: bool = True
+    includeDownloadButtons: bool = True
+    standalone: bool = True
+    template: str = "modern"
+    modelData: Dict[str, Any] = None
+    trainingResults: Dict[str, Any] = None
+
+class TemplateRequest(BaseModel):
+    id: str = None
+    name: str
+    sections: List[str]
+    config: Dict[str, Any]
+
+class TemplateResponse(BaseModel):
+    success: bool
+    templates: List[Dict[str, Any]] = []
     error: str = None
 
 @app.get("/health", response_model=HealthResponse)
@@ -766,23 +802,50 @@ async def list_projects():
         projects_dir = Path("projects")
         if not projects_dir.exists():
             return {"success": True, "projects": []}
-            
+
         projects = []
         for project_dir in projects_dir.iterdir():
             if project_dir.is_dir():
                 metadata_path = project_dir / 'project.json'
                 if metadata_path.exists():
-                    with open(metadata_path, 'r') as f:
-                        metadata = json.load(f)
-                        projects.append(metadata)
-                        
+                    try:
+                        with open(metadata_path, 'r') as f:
+                            metadata = json.load(f)
+
+                            # Ensure timestamps are valid numbers
+                            if 'created_at' not in metadata or not isinstance(metadata.get('created_at'), (int, float)):
+                                metadata['created_at'] = time.time()
+                            if 'updated_at' not in metadata or not isinstance(metadata.get('updated_at'), (int, float)):
+                                metadata['updated_at'] = time.time()
+
+                            # Ensure required fields exist
+                            if 'id' not in metadata:
+                                metadata['id'] = project_dir.name
+                            if 'name' not in metadata:
+                                metadata['name'] = project_dir.name.replace('_', ' ').title()
+                            if 'description' not in metadata:
+                                metadata['description'] = ''
+                            if 'status' not in metadata:
+                                metadata['status'] = 'active'
+                            if 'files' not in metadata:
+                                metadata['files'] = []
+
+                            projects.append(metadata)
+                    except json.JSONDecodeError as je:
+                        logger.error(f"Failed to parse metadata for project {project_dir.name}: {je}")
+                        continue
+                    except Exception as pe:
+                        logger.error(f"Error processing project {project_dir.name}: {pe}")
+                        continue
+
         # Sort by creation date (newest first)
         projects.sort(key=lambda x: x.get('created_at', 0), reverse=True)
-        
+
         return {"success": True, "projects": projects}
-        
+
     except Exception as e:
         logger.error(f"Project listing failed: {e}")
+        logger.exception(e)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/projects/{project_id}")
@@ -1003,6 +1066,336 @@ async def profile_data(csv_file: UploadFile = File(...)):
             status_code=500,
             detail={'error': str(e)}
         )
+
+@app.post("/api/export/pdf")
+async def export_pdf(request: ExportPDFRequest):
+    """
+    Generate a PDF report from training results
+    Note: This is a simplified implementation returning structured data.
+    For actual PDF generation, consider using reportlab or weasyprint.
+    """
+    try:
+        logger.info(f"Received PDF export request: {request.title}")
+
+        # Create a structured report data
+        report_data = {
+            'title': request.title,
+            'author': request.author,
+            'generated_at': datetime.now().isoformat(),
+            'page_size': request.pageSize,
+            'color_scheme': request.colorScheme,
+            'sections': []
+        }
+
+        # Add requested sections
+        if 'executive_summary' in request.includeSections and request.trainingResults:
+            report_data['sections'].append({
+                'id': 'executive_summary',
+                'title': 'Executive Summary',
+                'content': {
+                    'overview': f"Model training completed successfully",
+                    'best_model': request.trainingResults.get('best_model', {}).get('model_name', 'N/A'),
+                    'best_score': request.trainingResults.get('best_model', {}).get('score', 0)
+                }
+            })
+
+        if 'performance_metrics' in request.includeSections and request.trainingResults:
+            models = request.trainingResults.get('model_comparison', [])
+            report_data['sections'].append({
+                'id': 'performance_metrics',
+                'title': 'Performance Metrics',
+                'content': {
+                    'models': models
+                }
+            })
+
+        # Return structured data (frontend can format or send to a PDF service)
+        return {
+            'success': True,
+            'report_data': report_data,
+            'message': 'PDF report data generated. For actual PDF, integrate with a PDF generation service.'
+        }
+
+    except Exception as e:
+        logger.error(f"PDF export failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/export/html")
+async def export_html(request: ExportHTMLRequest):
+    """
+    Generate an interactive HTML report from training results
+    """
+    try:
+        logger.info(f"Received HTML export request: {request.title}")
+
+        # HTML template
+        html_template = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            line-height: 1.6;
+            {% if template == 'modern' %}
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            {% elif template == 'dashboard' %}
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            {% else %}
+            background: #f5f5f5;
+            {% endif %}
+            color: #333;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            padding: 40px;
+        }
+        h1 {
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        .metadata {
+            color: #718096;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .section h2 {
+            color: #2d3748;
+            margin-bottom: 15px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        th {
+            background: #edf2f7;
+            font-weight: 600;
+            color: #2d3748;
+        }
+        .metric {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            margin: 5px;
+            font-weight: 500;
+        }
+        {% if include_dark_mode %}
+        .dark-mode-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #2d3748;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        body.dark {
+            background: #1a202c;
+            color: #e2e8f0;
+        }
+        body.dark .container {
+            background: #2d3748;
+        }
+        body.dark h1, body.dark h2 {
+            color: #e2e8f0;
+        }
+        body.dark .section {
+            background: #4a5568;
+        }
+        {% endif %}
+    </style>
+</head>
+<body>
+    {% if include_dark_mode %}
+    <button class="dark-mode-toggle" onclick="document.body.classList.toggle('dark')">Toggle Dark Mode</button>
+    {% endif %}
+
+    <div class="container">
+        <h1>{{ title }}</h1>
+        <div class="metadata">
+            <p>Generated: {{ generated_at }}</p>
+            <p>Template: {{ template|title }}</p>
+        </div>
+
+        {% if training_results %}
+        <div class="section">
+            <h2>Training Results</h2>
+            <p><strong>Best Model:</strong> <span class="metric">{{ best_model }}</span></p>
+            <p><strong>Best Score:</strong> <span class="metric">{{ best_score }}</span></p>
+        </div>
+
+        {% if models %}
+        <div class="section">
+            <h2>Model Comparison</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Model</th>
+                        <th>Score</th>
+                        <th>Training Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for model in models %}
+                    <tr>
+                        <td>{{ model.model_name }}</td>
+                        <td>{{ "%.4f"|format(model.score) }}</td>
+                        <td>{{ "%.2f"|format(model.training_time) }}s</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+        {% endif %}
+
+        <div class="section">
+            <h2>Report Configuration</h2>
+            <p>Interactive Charts: {{ 'Enabled' if include_charts else 'Disabled' }}</p>
+            <p>Dark Mode: {{ 'Enabled' if include_dark_mode else 'Disabled' }}</p>
+            <p>Search & Filter: {{ 'Enabled' if include_search else 'Disabled' }}</p>
+        </div>
+    </div>
+
+    {% if include_download %}
+    <script>
+        function downloadAsJSON() {
+            const data = {{ training_results|tojson }};
+            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'report_data.json';
+            a.click();
+        }
+    </script>
+    {% endif %}
+</body>
+</html>
+"""
+
+        template = Template(html_template)
+
+        # Prepare template data
+        template_data = {
+            'title': request.title,
+            'template': request.template,
+            'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'include_dark_mode': request.includeDarkMode,
+            'include_charts': request.includeInteractiveCharts,
+            'include_search': request.includeSearchFilter,
+            'include_download': request.includeDownloadButtons,
+            'training_results': request.trainingResults,
+            'best_model': request.trainingResults.get('best_model', {}).get('model_name', 'N/A') if request.trainingResults else 'N/A',
+            'best_score': request.trainingResults.get('best_model', {}).get('score', 0) if request.trainingResults else 0,
+            'models': request.trainingResults.get('model_comparison', []) if request.trainingResults else []
+        }
+
+        # Render HTML
+        html_content = template.render(**template_data)
+
+        # Return HTML as downloadable file
+        return Response(
+            content=html_content,
+            media_type="text/html",
+            headers={
+                'Content-Disposition': f'attachment; filename="{request.title.replace(" ", "_")}.html"'
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"HTML export failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/templates", response_model=TemplateResponse)
+async def get_templates():
+    """Get all saved report templates"""
+    try:
+        templates_dir = project_root / 'templates'
+        templates_dir.mkdir(exist_ok=True)
+
+        templates = []
+        for template_file in templates_dir.glob('*.json'):
+            try:
+                with open(template_file, 'r') as f:
+                    template_data = json.load(f)
+                    templates.append(template_data)
+            except Exception as e:
+                logger.error(f"Error loading template {template_file}: {e}")
+
+        return TemplateResponse(success=True, templates=templates)
+    except Exception as e:
+        logger.error(f"Failed to load templates: {e}")
+        return TemplateResponse(success=False, error=str(e))
+
+@app.post("/api/templates")
+async def save_template(request: TemplateRequest):
+    """Save a new report template"""
+    try:
+        templates_dir = project_root / 'templates'
+        templates_dir.mkdir(exist_ok=True)
+
+        template_id = request.id or str(uuid.uuid4())
+        template_data = {
+            'id': template_id,
+            'name': request.name,
+            'sections': request.sections,
+            'config': request.config,
+            'created_at': datetime.now().isoformat()
+        }
+
+        template_file = templates_dir / f'{template_id}.json'
+        with open(template_file, 'w') as f:
+            json.dump(template_data, f, indent=2)
+
+        return {'success': True, 'template_id': template_id, 'message': f'Template "{request.name}" saved successfully'}
+    except Exception as e:
+        logger.error(f"Failed to save template: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/templates/{template_id}")
+async def delete_template(template_id: str):
+    """Delete a report template"""
+    try:
+        templates_dir = project_root / 'templates'
+        template_file = templates_dir / f'{template_id}.json'
+
+        if template_file.exists():
+            template_file.unlink()
+            return {'success': True, 'message': 'Template deleted successfully'}
+        else:
+            raise HTTPException(status_code=404, detail='Template not found')
+    except Exception as e:
+        logger.error(f"Failed to delete template: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 def check_dependencies():
     """Check if required Python packages are installed"""

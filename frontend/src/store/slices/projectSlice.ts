@@ -48,16 +48,82 @@ const initialState: ProjectState = {
   showCreateWizard: false,
 };
 
+// Load all projects from backend
+export const loadProjects = createAsyncThunk(
+  'project/loadAll',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await fetch('http://localhost:8000/projects');
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error('Failed to load projects');
+      }
+
+      return data.projects;
+    } catch (error) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Failed to load projects');
+    }
+  }
+);
+
 // Enhanced async thunks for project operations
 export const createNewProject = createAsyncThunk(
   'project/create',
   async (request: CreateProjectRequest, { rejectWithValue }) => {
     try {
-      const result = await tauriAPI.createProject(request);
-      if (!result.success || !result.projectConfig) {
-        throw new Error(result.error || 'Failed to create project');
+      // Try Tauri first (for desktop app)
+      if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+        const result = await tauriAPI.createProject(request);
+        if (!result.success || !result.projectConfig) {
+          throw new Error(result.error || 'Failed to create project');
+        }
+        return result.projectConfig;
       }
-      return result.projectConfig;
+
+      // Fallback to backend API (for web)
+      const response = await fetch('http://localhost:8000/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: request.name,
+          description: request.description,
+          directory: request.directory
+        })
+      });
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to create project');
+      }
+
+      // Convert backend format to ProjectConfig format
+      return {
+        metadata: {
+          id: data.project.id,
+          name: data.project.name,
+          description: data.project.description,
+          createdAt: new Date(data.project.created_at * 1000).toISOString(),
+          lastModified: new Date(data.project.updated_at * 1000).toISOString(),
+          version: '1.0.0',
+          projectPath: request.directory || `/projects/${data.project.id}`
+        },
+        structure: {
+          projectPath: request.directory || `/projects/${data.project.id}`,
+          dataPath: `${request.directory || `/projects/${data.project.id}`}/data`,
+          modelsPath: `${request.directory || `/projects/${data.project.id}`}/models`,
+          resultsPath: `${request.directory || `/projects/${data.project.id}`}/results`,
+          predictionsPath: `${request.directory || `/projects/${data.project.id}`}/predictions`,
+          exportsPath: `${request.directory || `/projects/${data.project.id}`}/exports`
+        },
+        settings: {
+          defaultTaskType: 'classification',
+          autoSaveResults: true,
+          maxModelVersions: 10,
+          dataValidationStrict: true,
+          enableModelVersioning: true
+        }
+      };
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to create project');
     }
@@ -66,13 +132,58 @@ export const createNewProject = createAsyncThunk(
 
 export const loadProject = createAsyncThunk(
   'project/load',
-  async (projectPath: string, { rejectWithValue }) => {
+  async (projectId: string, { rejectWithValue }) => {
     try {
-      const result = await tauriAPI.loadProject(projectPath);
-      if (!result.success || !result.projectConfig) {
-        throw new Error(result.error || 'Failed to load project');
+      // Try Tauri first (for desktop app)
+      if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+        const result = await tauriAPI.loadProject(projectId);
+        if (!result.success || !result.projectConfig) {
+          throw new Error(result.error || 'Failed to load project');
+        }
+        return result.projectConfig;
       }
-      return result.projectConfig;
+
+      // Fallback to backend API (for web)
+      const response = await fetch(`http://localhost:8000/projects`);
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error('Failed to load projects');
+      }
+
+      // Find the specific project
+      const project = data.projects.find((p: any) => p.id === projectId);
+      if (!project) {
+        throw new Error(`Project ${projectId} not found`);
+      }
+
+      // Convert backend format to ProjectConfig format
+      return {
+        metadata: {
+          id: project.id,
+          name: project.name,
+          description: project.description || '',
+          createdAt: new Date(project.created_at * 1000).toISOString(),
+          lastModified: new Date(project.updated_at * 1000).toISOString(),
+          version: '1.0.0',
+          projectPath: `./projects/${project.id}`
+        },
+        structure: {
+          projectPath: `./projects/${project.id}`,
+          dataPath: `./projects/${project.id}/data`,
+          modelsPath: `./projects/${project.id}/models`,
+          resultsPath: `./projects/${project.id}/results`,
+          predictionsPath: `./projects/${project.id}/predictions`,
+          exportsPath: `./projects/${project.id}/exports`
+        },
+        settings: {
+          defaultTaskType: 'classification',
+          autoSaveResults: true,
+          maxModelVersions: 10,
+          dataValidationStrict: true,
+          enableModelVersioning: true
+        }
+      };
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to load project');
     }
@@ -116,6 +227,29 @@ const projectSlice = createSlice({
       state.currentProject = null;
       state.isProjectLoaded = false;
       state.error = null;
+
+      // Clear from localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('currentProjectId');
+        localStorage.removeItem('currentProjectName');
+        localStorage.removeItem('currentProject');
+      }
+    },
+
+    // Restore project from localStorage
+    restoreProjectFromStorage: (state) => {
+      if (typeof window !== 'undefined') {
+        const savedProject = localStorage.getItem('currentProject');
+        if (savedProject) {
+          try {
+            const project = JSON.parse(savedProject);
+            state.currentProject = project;
+            state.isProjectLoaded = true;
+          } catch (error) {
+            console.error('Failed to restore project from localStorage:', error);
+          }
+        }
+      }
     },
     
     // Update project metadata
@@ -195,7 +329,14 @@ const projectSlice = createSlice({
         state.isProjectLoaded = true;
         state.error = null;
         state.showCreateWizard = false;
-        
+
+        // Store in localStorage for persistence
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('currentProjectId', action.payload.metadata.id);
+          localStorage.setItem('currentProjectName', action.payload.metadata.name);
+          localStorage.setItem('currentProject', JSON.stringify(action.payload));
+        }
+
         // Create project summary for recent projects
         const projectSummary: ProjectSummary = {
           metadata: action.payload.metadata,
@@ -205,7 +346,7 @@ const projectSlice = createSlice({
             totalDataFiles: 0,
           }
         };
-        
+
         // Add to recent projects
         const existingIndex = state.recentProjects.findIndex(
           p => p.metadata.projectPath === action.payload.metadata.projectPath
@@ -232,7 +373,14 @@ const projectSlice = createSlice({
         state.currentProject = action.payload;
         state.isProjectLoaded = true;
         state.error = null;
-        
+
+        // Store in localStorage for persistence
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('currentProjectId', action.payload.metadata.id);
+          localStorage.setItem('currentProjectName', action.payload.metadata.name);
+          localStorage.setItem('currentProject', JSON.stringify(action.payload));
+        }
+
         // Create project summary for recent projects
         const projectSummary: ProjectSummary = {
           metadata: action.payload.metadata,
@@ -242,7 +390,7 @@ const projectSlice = createSlice({
             totalDataFiles: 0,
           }
         };
-        
+
         // Add to recent projects
         const existingIndex = state.recentProjects.findIndex(
           p => p.metadata.projectPath === action.payload.metadata.projectPath
@@ -293,12 +441,44 @@ const projectSlice = createSlice({
         // Silently fail for summary updates
         console.warn('Failed to update project summary:', action.payload);
       });
+
+    // Load all projects
+    builder
+      .addCase(loadProjects.pending, (state) => {
+        state.isLoadingProject = true;
+        state.error = null;
+      })
+      .addCase(loadProjects.fulfilled, (state, action) => {
+        state.isLoadingProject = false;
+        // Convert projects to ProjectSummary format and update recent projects
+        state.recentProjects = action.payload.map((project: any) => ({
+          metadata: {
+            id: project.id,
+            name: project.name,
+            description: project.description || '',
+            createdAt: new Date(project.created_at * 1000).toISOString(),
+            lastModified: new Date(project.updated_at * 1000).toISOString(),
+            version: '1.0.0',
+            projectPath: `./projects/${project.id}`
+          },
+          stats: {
+            totalModels: project.models?.length || 0,
+            totalPredictions: 0,
+            totalDataFiles: project.files?.length || 0
+          }
+        }));
+      })
+      .addCase(loadProjects.rejected, (state, action) => {
+        state.isLoadingProject = false;
+        state.error = action.payload as string;
+      });
   },
 });
 
 // Export actions
 export const {
   clearProject,
+  restoreProjectFromStorage,
   updateProjectMetadata,
   updateProjectSettings,
   showCreateWizard,

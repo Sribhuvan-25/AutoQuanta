@@ -14,8 +14,28 @@ AutoQuanta is a desktop app that lets you work with machine learning without sen
 
 ## Quick start
 
-1. Install dependencies: `npm install` (frontend) and `pip install -r requirements.txt` (backend)
-2. Start backend: `python Analysis/train_api.py`
-3. Start frontend: `npm run dev`
+### Option 1: Start both servers together (Recommended)
+```bash
+# First time setup
+npm install              # Install concurrently
+npm run install-all      # Install all dependencies (Python + Frontend)
+
+# Start both servers
+npm run dev              # Starts backend (port 8000) and frontend (port 3000)
+```
+
+### Option 2: Start servers separately
+```bash
+# Terminal 1 - Backend
+python fastapi_server.py
+
+# Terminal 2 - Frontend
+cd frontend && npm run dev
+```
+
+**URLs:**
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
 
 Built with Next.js, Python/FastAPI, and scikit-learn. Completely local, completely yours.

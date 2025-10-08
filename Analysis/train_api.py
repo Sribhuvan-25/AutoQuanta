@@ -171,13 +171,20 @@ def map_frontend_to_python_models(frontend_models):
     
     return python_models
 
-def save_trained_model_simple(results, df, target_column: str) -> Dict[str, Any]:
+def save_trained_model_simple(results, df, target_column: str, project_path: str = None) -> Dict[str, Any]:
     """Save trained model with pickle and metadata (simplified version)."""
     try:
         # Create unique model directory
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         model_name = results.best_model.model_name
-        model_dir = Path(f"models/{model_name}_{timestamp}")
+
+        # Use project path if provided, otherwise default to models/
+        if project_path:
+            base_dir = Path(project_path) / "models"
+        else:
+            base_dir = Path("models")
+
+        model_dir = base_dir / f"{model_name}_{timestamp}"
         model_dir.mkdir(parents=True, exist_ok=True)
         
         logger.info(f"Saving model to: {model_dir}")
@@ -380,18 +387,41 @@ def train_from_api(csv_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
         # Validate and potentially correct task type
         original_task_type = config.get('task_type', 'classification')
         target_series = df[target_column]
-        
+
+        # Try to convert target to numeric if it's not already
+        is_numeric = pd.api.types.is_numeric_dtype(target_series)
+        if not is_numeric:
+            # Try conversion
+            target_numeric = pd.to_numeric(target_series, errors='coerce')
+            conversion_rate = target_numeric.notna().sum() / len(target_series)
+
+            # If >90% convert successfully, it's likely numeric
+            if conversion_rate > 0.9:
+                logger.info(f"Target column '{target_column}' detected as text but {conversion_rate:.1%} values are numeric. Converting to numeric.")
+                df[target_column] = target_numeric
+                target_series = df[target_column]
+                is_numeric = True
+
         # Check if the target looks like continuous data (many unique values relative to dataset size)
         unique_ratio = target_series.nunique() / len(target_series)
-        is_numeric = pd.api.types.is_numeric_dtype(target_series)
-        
+        unique_count = target_series.nunique()
+
         if original_task_type == 'classification' and is_numeric and unique_ratio > 0.1:
-            logger.warning(f"Target column '{target_column}' has {target_series.nunique()} unique values ({unique_ratio:.1%} of data)")
+            logger.warning(f"Target column '{target_column}' has {unique_count} unique values ({unique_ratio:.1%} of data)")
             logger.warning(f"This looks like continuous data. Switching from classification to regression.")
             config['task_type'] = 'regression'
         elif original_task_type == 'regression' and not is_numeric:
             logger.warning(f"Target column '{target_column}' is not numeric. Switching from regression to classification.")
             config['task_type'] = 'classification'
+        elif original_task_type == 'classification' and unique_count > 100:
+            # Too many classes for classification
+            raise ValueError(
+                f"Target column '{target_column}' has {unique_count} unique values, which is too many for classification. "
+                f"This data appears to be continuous. Please either:\n"
+                f"1. Change task type to 'regression' if this is a continuous variable\n"
+                f"2. Bin the values into fewer categories if you need classification\n"
+                f"3. Select a different target column"
+            )
         
         # Map frontend model names to Python model names
         python_models = map_frontend_to_python_models(config.get('models_to_try', ['random_forest']))
@@ -443,7 +473,16 @@ def train_from_api(csv_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
         export_result = None
         try:
             emit_progress("exporting", 95, "Saving trained model...")
-            export_result = save_trained_model_simple(results, df, target_column)
+
+            # Extract project path from config if available
+            project_config = config.get('projectConfig')
+            project_path = None
+            if project_config and isinstance(project_config, dict):
+                # Try to get project path from the structure
+                structure = project_config.get('structure', {})
+                project_path = structure.get('projectPath')
+
+            export_result = save_trained_model_simple(results, df, target_column, project_path)
             if export_result['success']:
                 logger.info(f"Model saved successfully to: {export_result['model_path']}")
                 # Add export info to serialized results
@@ -456,7 +495,12 @@ def train_from_api(csv_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
         
         # Stage 6: Complete
         emit_progress("completed", 100, f"Training completed! Best model: {results.best_model.model_name}")
-        
+
+        # Add project save information to results if saved to project
+        if export_result and export_result.get('success') and project_path:
+            serialized_results['projectSaved'] = True
+            serialized_results['projectSavePath'] = export_result.get('model_path')
+
         return {
             'success': True,
             'results': serialized_results,

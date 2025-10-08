@@ -238,12 +238,12 @@ export default function Home() {
           </div>
 
           {isLoadingProjects ? (
-            <div className="flex items-center justify-center p-8">
+            <div key="projects-loading" className="flex items-center justify-center p-8">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 mr-3"></div>
               <span className="text-sm text-gray-600">Loading projects...</span>
             </div>
           ) : recentProjects.length === 0 ? (
-            <div className="text-center p-8 text-gray-500">
+            <div key="projects-empty" className="text-center p-8 text-gray-500">
               <div className="p-3 bg-gray-100 rounded-2xl border border-gray-200 inline-flex mb-3">
                 <FolderOpen className="h-8 w-8 text-gray-400" />
               </div>

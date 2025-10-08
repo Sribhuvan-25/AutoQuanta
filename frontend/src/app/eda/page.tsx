@@ -91,6 +91,40 @@ export default function EDAPage() {
     setValidationErrors([]);
   }, [dispatch]);
 
+  const handleExportReport = useCallback(() => {
+    if (!currentDataset) return;
+
+    const exportData = {
+      metadata: {
+        exportDate: new Date().toISOString(),
+        fileName: currentDataset.fileName,
+        exportType: 'EDA_Report'
+      },
+      datasetInfo: {
+        fileName: currentDataset.fileName,
+        rowCount: currentDataset.metadata.rowCount,
+        columnCount: currentDataset.metadata.columnCount,
+        fileSize: currentDataset.metadata.fileSize,
+        memoryUsage: currentDataset.metadata.memoryUsage
+      },
+      columns: advancedColumns || currentDataset.columns,
+      statisticalSummary: statisticalSummary,
+      qualityReport: qualityReport,
+      warnings: [...dataWarnings, ...currentDataset.warnings],
+      dataSample: currentDataset.data.slice(0, 10)
+    };
+
+    // Create and download JSON file
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+    const exportFileName = `eda_report_${currentDataset.fileName.replace('.csv', '')}_${new Date().toISOString().slice(0, 10)}.json`;
+
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileName);
+    linkElement.click();
+  }, [currentDataset, advancedColumns, statisticalSummary, qualityReport, dataWarnings]);
+
   return (
     <AppLayout>
       <div className="space-y-8">
@@ -202,7 +236,7 @@ export default function EDAPage() {
                   <Button variant="outline" onClick={handleReset}>
                     Upload New File
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={handleExportReport}>
                     <Download className="h-4 w-4 mr-2" />
                     Export Report
                   </Button>
