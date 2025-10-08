@@ -97,6 +97,7 @@ class ExportPDFRequest(BaseModel):
     pageSize: str = "A4"
     modelData: Dict[str, Any] = None
     trainingResults: Dict[str, Any] = None
+    projectId: str = None  # Optional: Save to project directory
 
 class ExportHTMLRequest(BaseModel):
     title: str
@@ -108,6 +109,7 @@ class ExportHTMLRequest(BaseModel):
     template: str = "modern"
     modelData: Dict[str, Any] = None
     trainingResults: Dict[str, Any] = None
+    projectId: str = None  # Optional: Save to project directory
 
 class TemplateRequest(BaseModel):
     id: str = None
@@ -1109,11 +1111,30 @@ async def export_pdf(request: ExportPDFRequest):
                 }
             })
 
+        # If projectId is provided, save JSON to project directory
+        saved_path = None
+        if request.projectId:
+            try:
+                project_dir = Path("projects") / request.projectId / "exports"
+                project_dir.mkdir(parents=True, exist_ok=True)
+
+                filename = f"{request.title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                file_path = project_dir / filename
+
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(report_data, f, indent=2)
+
+                saved_path = str(file_path)
+                logger.info(f"PDF report data saved to project: {saved_path}")
+            except Exception as save_error:
+                logger.warning(f"Failed to save PDF data to project: {save_error}")
+
         # Return structured data (frontend can format or send to a PDF service)
         return {
             'success': True,
             'report_data': report_data,
-            'message': 'PDF report data generated. For actual PDF, integrate with a PDF generation service.'
+            'saved_path': saved_path,
+            'message': f'PDF report data generated{" and saved to project" if saved_path else ""}. For actual PDF, integrate with a PDF generation service.'
         }
 
     except Exception as e:
@@ -1267,7 +1288,7 @@ async def export_html(request: ExportHTMLRequest):
                 {% for model in models %}
                     <tr>
                         <td>{{ model.model_name }}</td>
-                        <td>{{ "%.4f"|format(model.score) }}</td>
+                        <td>{{ "%.4f"|format(model.mean_score if model.mean_score is defined else model.score) }}</td>
                         <td>{{ "%.2f"|format(model.training_time) }}s</td>
                     </tr>
                 {% endfor %}
@@ -1305,6 +1326,10 @@ async def export_html(request: ExportHTMLRequest):
         template = Template(html_template)
 
         # Prepare template data
+        best_model_data = request.trainingResults.get('best_model', {}) if request.trainingResults else {}
+        # Try mean_score first, fallback to score
+        best_score = best_model_data.get('mean_score') or best_model_data.get('score', 0) if best_model_data else 0
+
         template_data = {
             'title': request.title,
             'template': request.template,
@@ -1314,20 +1339,39 @@ async def export_html(request: ExportHTMLRequest):
             'include_search': request.includeSearchFilter,
             'include_download': request.includeDownloadButtons,
             'training_results': request.trainingResults,
-            'best_model': request.trainingResults.get('best_model', {}).get('model_name', 'N/A') if request.trainingResults else 'N/A',
-            'best_score': request.trainingResults.get('best_model', {}).get('score', 0) if request.trainingResults else 0,
+            'best_model': best_model_data.get('model_name', 'N/A'),
+            'best_score': best_score,
             'models': request.trainingResults.get('model_comparison', []) if request.trainingResults else []
         }
 
         # Render HTML
         html_content = template.render(**template_data)
 
+        # If projectId is provided, save to project directory
+        saved_path = None
+        if request.projectId:
+            try:
+                project_dir = Path("projects") / request.projectId / "exports"
+                project_dir.mkdir(parents=True, exist_ok=True)
+
+                filename = f"{request.title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+                file_path = project_dir / filename
+
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(html_content)
+
+                saved_path = str(file_path)
+                logger.info(f"HTML report saved to project: {saved_path}")
+            except Exception as save_error:
+                logger.warning(f"Failed to save HTML to project: {save_error}")
+
         # Return HTML as downloadable file
         return Response(
             content=html_content,
             media_type="text/html",
             headers={
-                'Content-Disposition': f'attachment; filename="{request.title.replace(" ", "_")}.html"'
+                'Content-Disposition': f'attachment; filename="{request.title.replace(" ", "_")}.html"',
+                'X-Saved-Path': saved_path or ''  # Include path in response header
             }
         )
 

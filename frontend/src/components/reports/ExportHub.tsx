@@ -15,6 +15,8 @@ import { PDFReportGenerator } from './PDFReportGenerator';
 import { HTMLReportGenerator } from './HTMLReportGenerator';
 import { ModelDocExporter } from './ModelDocExporter';
 import { ReportTemplateBuilder } from './ReportTemplateBuilder';
+import { useAppSelector } from '@/store/hooks';
+import { selectCurrentProject } from '@/store/slices/projectSlice';
 
 interface ExportHubProps {
   modelData?: any;
@@ -61,6 +63,7 @@ export function ExportHub({
   className
 }: ExportHubProps) {
   const [currentView, setCurrentView] = useState<ExportView>('menu');
+  const currentProject = useAppSelector(selectCurrentProject);
 
   const handlePDFGeneration = async (config: any) => {
     console.log('Generating PDF with config:', config);
@@ -71,7 +74,8 @@ export function ExportHub({
         body: JSON.stringify({
           ...config,
           modelData: modelData,
-          trainingResults: trainingResults
+          trainingResults: trainingResults,
+          projectId: currentProject?.metadata?.id // Add project ID
         })
       });
 
@@ -81,16 +85,21 @@ export function ExportHub({
 
       const result = await response.json();
 
-      // Download the structured report data
-      const blob = new Blob([JSON.stringify(result.report_data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${config.title.replace(/ /g, '_')}_report.json`;
-      link.click();
-      URL.revokeObjectURL(url);
+      // If saved to project, show success message
+      if (result.saved_path) {
+        alert(`PDF report data saved to project:\n${result.saved_path}\n\nNote: This is structured JSON data. For actual PDF generation, consider integrating with a PDF service.`);
+      } else {
+        // Download the structured report data if not saved to project
+        const blob = new Blob([JSON.stringify(result.report_data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${config.title.replace(/ /g, '_')}_report.json`;
+        link.click();
+        URL.revokeObjectURL(url);
 
-      alert('PDF report data generated successfully! For full PDF, consider integrating with a PDF service.');
+        alert('PDF report data generated successfully! For full PDF, consider integrating with a PDF service.');
+      }
     } catch (error) {
       console.error('PDF generation failed:', error);
       alert('Failed to generate PDF report: ' + (error as Error).message);
@@ -106,13 +115,17 @@ export function ExportHub({
         body: JSON.stringify({
           ...config,
           modelData: modelData,
-          trainingResults: trainingResults
+          trainingResults: trainingResults,
+          projectId: currentProject?.metadata?.id // Add project ID
         })
       });
 
       if (!response.ok) {
         throw new Error('HTML generation failed');
       }
+
+      // Check if saved to project
+      const savedPath = response.headers.get('X-Saved-Path');
 
       // Download the HTML file
       const htmlContent = await response.text();
@@ -124,7 +137,11 @@ export function ExportHub({
       link.click();
       URL.revokeObjectURL(url);
 
-      alert('HTML report generated and downloaded successfully!');
+      if (savedPath && savedPath !== '') {
+        alert(`HTML report generated and downloaded!\n\nAlso saved to project:\n${savedPath}`);
+      } else {
+        alert('HTML report generated and downloaded successfully!');
+      }
     } catch (error) {
       console.error('HTML generation failed:', error);
       alert('Failed to generate HTML report: ' + (error as Error).message);
