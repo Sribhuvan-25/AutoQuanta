@@ -1,11 +1,37 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Settings, Shield, HardDrive, Cpu } from 'lucide-react';
+import { Settings, Shield, HardDrive, Cpu, FolderOpen } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { tauriAPI } from '@/lib/tauri';
 
 export default function SettingsPage() {
+  const [projectLocation, setProjectLocation] = useState<string>('~/Documents/AutoQuanta');
+
+  // Load saved project location from localStorage
+  useEffect(() => {
+    const savedLocation = localStorage.getItem('defaultProjectLocation');
+    if (savedLocation) {
+      setProjectLocation(savedLocation);
+    }
+  }, []);
+
+  const handleChangeLocation = async () => {
+    try {
+      const directory = await tauriAPI.selectDirectory();
+      if (directory) {
+        setProjectLocation(directory);
+        localStorage.setItem('defaultProjectLocation', directory);
+        // Show success message
+        alert(`Default project location updated to:\n${directory}`);
+      }
+    } catch (error) {
+      console.error('Failed to select directory:', error);
+      alert('Failed to change location. Please try again.');
+    }
+  };
+
   return (
     <AppLayout>
       <div className="space-y-8">
@@ -90,9 +116,10 @@ export default function SettingsPage() {
               <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
                 <p className="text-sm font-medium text-gray-900 mb-1">Project Location</p>
                 <p className="text-xs text-gray-600 mb-2">Default folder for new projects</p>
-                <p className="text-sm text-gray-700 font-mono">~/Documents/AutoQuanta</p>
+                <p className="text-sm text-gray-700 font-mono break-all">{projectLocation}</p>
               </div>
-              <Button variant="outline" size="sm" disabled className="rounded-xl">
+              <Button variant="outline" size="sm" onClick={handleChangeLocation} className="rounded-xl">
+                <FolderOpen className="h-4 w-4 mr-2" />
                 Change Location
               </Button>
             </div>
