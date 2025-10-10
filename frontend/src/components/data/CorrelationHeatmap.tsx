@@ -66,8 +66,17 @@ export function CorrelationHeatmap({ data, className }: CorrelationHeatmapProps)
     headers.forEach((header, index) => {
       const sampleValues = sampledRows.slice(0, 100).map(row => parseFloat(row[index]));
       const numericCount = sampleValues.filter(v => !isNaN(v)).length;
+
       if (numericCount > sampleValues.length * 0.5) { // At least 50% numeric values
-        numericColumnIndices.push({ name: header, index });
+        // Check if column has variance (not constant)
+        const validValues = sampleValues.filter(v => !isNaN(v));
+        const mean = validValues.reduce((sum, v) => sum + v, 0) / validValues.length;
+        const variance = validValues.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / validValues.length;
+
+        // Only include columns with non-zero variance
+        if (variance > 0.0000001) {
+          numericColumnIndices.push({ name: header, index });
+        }
       }
     });
     
