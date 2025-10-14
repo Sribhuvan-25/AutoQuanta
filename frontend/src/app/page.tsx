@@ -100,7 +100,7 @@ export default function Home() {
           <div className="flex flex-col gap-6">
             {/* Current Project / No Project State */}
             {currentProject ? (
-              <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6">
+              <div className={`bg-white/60 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-sm p-6 ${!(isTraining || isProcessing || currentDataset || bestModel) ? 'flex-1' : ''}`}>
                 <div className="flex items-start gap-4 mb-4">
                   <div className="p-3 bg-gray-100 rounded-xl border border-gray-200">
                     <FolderOpen className="h-6 w-6 text-gray-900" />
